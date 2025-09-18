@@ -1,0 +1,41 @@
+Here’s a good starting set:
+
+N (number of people): min 10, max 500, increment 10, default 100.
+
+speed-max: min 0.1, max 2, increment 0.1, default 1.0.
+
+dt: min 0.05, max 1.0, increment 0.05, default 0.2.
+
+Behavior weights (each from 0 to 2, step 0.1, default 1.0):
+
+mg (goal factor)
+
+mc (cohesion factor)
+
+ms (separation factor)
+
+ml (alignment factor)
+
+mo (obstacle avoidance factor)
+
+Behavior radii (each from 1 to 20, step 1, defaults something like below):
+
+dc (cohesion radius) → default 6
+
+da (avoidance radius) → default 2
+
+dl (alignment radius) → default 8
+
+de (obstacle radius) → default 4
+
+panic-smooth: min 0.0, max 1.0, increment 0.05, default 0.5.
+
+🔲 Other interface items
+
+Switch: add a switch called show-vectors? (default OFF).
+
+Buttons:
+
+setup → set “Commands” = setup.
+
+go → set “Commands” = go, check the “Forever” box.
