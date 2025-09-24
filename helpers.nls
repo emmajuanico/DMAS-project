@@ -1,0 +1,52 @@
+
+; ==========
+; VECTOR HELPERS
+; ==========
+to-report v-add [a b]
+  report list (item 0 a + item 0 b) (item 1 a + item 1 b)
+end
+
+to-report v-sub [a b]
+  report list (item 0 a - item 0 b) (item 1 a - item 1 b)
+end
+
+to-report v-scale [a s]
+  report list (item 0 a * s) (item 1 a * s)
+end
+
+to-report v-scale-add [p vec s]
+  report list (item 0 p + item 0 vec * s) (item 1 p + item 1 vec * s)
+end
+
+to-report v-mag [a]
+  report sqrt ((item 0 a) ^ 2 + (item 1 a) ^ 2)
+end
+
+to-report unit [a]
+  let m v-mag a
+  if m = 0 [ report list 0 0 ]
+  report list ((item 0 a) / m) ((item 1 a) / m)
+end
+
+to-report limit-speed [a s]
+  let m v-mag a
+  if m > s [ report v-scale (unit a) s ]
+  report a
+end
+
+to-report vector-to [tx ty]
+  report list (tx - xcor) (ty - ycor)
+end
+
+to-report vector-from [sx sy tx ty]
+  report list (sx - tx) (sy - ty)
+end
+
+to-report can-move-to [nx ny]
+  report (nx > min-pxcor) and (nx < max-pxcor) and (ny > min-pycor) and (ny < max-pycor)
+end
+
+;; helper: add weighted vec to accumulator
+to-report v-plus [acc vec w]
+  report v-add acc (v-scale vec w)
+end
