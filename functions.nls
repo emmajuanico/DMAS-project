@@ -2,12 +2,18 @@
 ; ==========
 ; BEHAVIOR COMPONENTS
 ; ==========
-to-report goal-component 
-  ; this needs to be change cause we have multipule exits also exits visibility needs to be included here
-  ; if it's not visibule it should be (0,0)
-  let gx [pxcor] of goal-pos
-  let gy [pycor] of  goal-pos
-  report unit (vector-to gx gy)
+to-report goal-component
+  ;; check exits within their visibility
+  let visible-exits exits with [ distance myself <= visibility ]
+
+  if any? visible-exits [
+    ;; closest visible exit
+    let closest min-one-of visible-exits [ distance myself ]
+    report unit (vector-to [xcor] of closest [ycor] of closest)
+  ]
+
+  ;; no exit visible
+  report list 0 0
 end
 
 to-report cohesion-component
@@ -68,9 +74,20 @@ end
 ; ==========
 to update-panic
   ;; δ1: distance to goal vs ease distance
-  let gx [pxcor] of goal-pos
-  let gy [pycor] of goal-pos
-  let D distancexy gx gy
+  ;; compute distance to closest visible exit
+  let visible-exits exits with [ distance myself <= visibility ]
+  let D 0
+  
+  if any? visible-exits [
+    let closest min-one-of visible-exits [ distance myself ]
+    set D distance closest
+  ] 
+  ;; if no exit is visible, maybe use distance to nearest exit anyway
+  if not any? visible-exits [
+    let closest min-one-of exits [ distance myself ]
+    set D distance closest
+  ]
+
   let L max (list world-width world-height)
   let delta1 max list 0 ((D - ease-dist) / L)
 
