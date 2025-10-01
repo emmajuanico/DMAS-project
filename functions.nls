@@ -12,7 +12,7 @@ end
 
 to-report cohesion-component
   ;for every agent in a spesific rediuos you want to go in a mean diraction of positioof the agents around you
-  let ns other people in-radius dc
+  let ns other people with [group-id = [group-id] of myself] in-radius dc
   if any? ns [
     let cx mean [ xcor ] of ns
     let cy mean [ ycor ] of ns
@@ -23,7 +23,7 @@ end
 
 to-report separation-component
   ; 
-  let ns other people in-radius da
+  let ns other people with [group-id = [group-id] of myself] in-radius da
   if any? ns [
     let away list 0 0
     foreach sort ns [ neighbor ->
@@ -39,7 +39,7 @@ end
 
 
 to-report alignment-component
-  let ns other people in-radius dl
+  let ns other people with [group-id = [group-id] of myself] in-radius dl
   if any? ns [
     let vx mean [ item 0 velocity ] of ns
     let vy mean [ item 1 velocity ] of ns
@@ -75,7 +75,7 @@ to update-panic
   let delta1 max list 0 ((D - ease-dist) / L)
 
   ;; δ2: mismatch with neighbors
-  let ns other people in-radius dl
+  let ns other people with [group-id = [group-id] of myself] in-radius dl
   let delta2 0
   if any? ns [
     let vmean list (mean [ item 0 velocity ] of ns) (mean [ item 1 velocity ] of ns)
@@ -84,7 +84,7 @@ to update-panic
   ]
 
   ;; δ3: neighbors in discomfort (proxy: very slow agents)
-  let nsC other people in-radius dc
+  let nsC other people with [group-id = [group-id] of myself] in-radius dc
   let delta3 0
   if any? nsC [
     set delta3 (count nsC with [ v-mag velocity < 0.2 * vmax ]) / (count nsC)
