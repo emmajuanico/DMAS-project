@@ -62,6 +62,23 @@ to-report obstacle-component
   report list 0 0
 end
 
+to-report MOVE
+      ;;;;;;;;;;;;;;; let v-goal goal-component
+  let v-coh  cohesion-component
+  let v-sep  separation-component
+  let v-ali  alignment-componen    
+  let v-obs  obstacle-component
+
+  ;; weighted sum of components
+    ;;;;;;;;;;;;;;;; let v-new v-plus (list 0 0) v-goal mg
+  let v-new v-plus (list 0 0) v-coh mc
+  set v-new v-plus v-new v-sep ms
+  set v-new v-plus v-new v-ali ml
+  set v-new v-plus v-new v-obs mo
+  
+  report v-new
+end
+
 ; ==========
 ; OVERLAP & OBSTACULES
 ; ==========
