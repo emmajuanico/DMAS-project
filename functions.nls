@@ -16,6 +16,20 @@ to-report goal-component
   report list 0 0
 end
 
+to draw-door-visibility
+  ;; no clear-drawing here, so turtles and previous stamps persist
+  ask exits [
+    set shape "circle empty"
+    set size visibility * 2  ;; diameter = 2 * radius
+    stamp
+  ]
+end
+
+
+
+
+
+
 to-report cohesion-component
   ;for every agent in a spesific rediuos you want to go in a mean diraction of positioof the agents around you
   let ns other people in-radius dc
