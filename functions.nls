@@ -3,25 +3,33 @@
 ; BEHAVIOR COMPONENTS
 ; ==========
 to-report goal-component
-  ;; check exits within their visibility
-  let visible-exits exits with [ distance myself <= visibility ]
-
-  if any? visible-exits [
-    ;; closest visible exit
-    let closest min-one-of visible-exits [ distance myself ]
-    report unit (vector-to [xcor] of closest [ycor] of closest)
+  ;; check patches marked as exits that are visible
+  let visible-exits patches with [
+    is-exit? and distance myself <= visibility
   ]
-
+  
+  if any? visible-exits [
+    ;; closest exit patch
+    let closest min-one-of visible-exits [ distance myself ]
+    report unit (vector-to [pxcor] of closest [pycor] of closest)
+  ]
+  
   ;; no exit visible
   report list 0 0
 end
 
+
 to draw-door-visibility
-  ;; no clear-drawing here, so turtles and previous stamps persist
-  ask exits [
-    set shape "circle empty"
-    set size visibility * 2  ;; diameter = 2 * radius
-    stamp
+  clear-drawing
+  
+  ask patches with [is-exit? and is-main-exit?] [
+    sprout 1 [
+      set shape "circle empty"
+      set color green
+      set size visibility * 2
+      stamp
+      die
+    ]
   ]
 end
 
@@ -89,18 +97,21 @@ end
 to update-panic
   ;; δ1: distance to goal vs ease distance
   ;; compute distance to closest visible exit
-  let visible-exits exits with [ distance myself <= visibility ]
+  let visible-exits patches with [
+  is-exit? and distance myself <= visibility
+  ]
   let D 0
   
   if any? visible-exits [
     let closest min-one-of visible-exits [ distance myself ]
     set D distance closest
   ] 
-  ;; if no exit is visible, maybe use distance to nearest exit anyway
+  ;; if no exit is visible, use nearest exit anyway
   if not any? visible-exits [
-    let closest min-one-of exits [ distance myself ]
+    let closest min-one-of patches with [is-exit?] [ distance myself ]
     set D distance closest
   ]
+  
 
   let L max (list world-width world-height)
   let delta1 max list 0 ((D - ease-dist) / L)
