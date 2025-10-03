@@ -42,10 +42,6 @@ to-report vector-from [sx sy tx ty]
   report list (sx - tx) (sy - ty)
 end
 
-to-report can-move-to [nx ny]
-  report (nx > min-pxcor) and (nx < max-pxcor) and (ny > min-pycor) and (ny < max-pycor)
-end
-
 ;; helper: add weighted vec to accumulator
 to-report v-plus [acc vec w]
   report v-add acc (v-scale vec w)

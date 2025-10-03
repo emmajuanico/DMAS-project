@@ -1,0 +1,138 @@
+to-report next-spot
+  let p item (spot-index mod length spawn-spots) spawn-spots
+  set spot-index spot-index + 1
+  report p 
+end
+
+to-report floor-patches-ordered
+  let margin 1
+  let candidates patches with [
+    pxcor > (min-pxcor + margin) and pxcor < (max-pxcor - margin) and
+    pycor > (min-pycor + margin) and pycor < (max-pycor - margin) and
+    not any? obstacles-here
+  ]
+  report sort-by
+    [[a b] ->
+      ([pycor] of a > [pycor] of b) or
+      (([pycor] of a = [pycor] of b) and ([pxcor] of a < [pxcor] of b))
+    ]
+    (sort candidates)
+end
+
+to init-spawn-system
+  set group-colors [ red blue green orange pink cyan violet brown ]
+  set next-gid 0
+  set spot-index 0
+  set spawn-spots floor-patches-ordered
+  if empty? spawn-spots [
+    user-message "No free floor patches to spawn on."; stop
+  ]
+end
+
+to-report jitter-around [cx cy radius]
+  let ang   random-float 360
+  ;; sqrt for uniform-in-disk sampling
+  let dist  radius * sqrt random-float 1
+  report (list (cx + dist * cos ang) (cy + dist * sin ang))
+end
+
+to-report random-center-patch [margin tries]
+  ;; Try up to `tries` times to find a clean patch away from borders
+  let a tries
+  while [a > 0] [
+    let p one-of patches with [
+      pxcor > (min-pxcor + margin) and pxcor < (max-pxcor - margin) and
+      pycor > (min-pycor + margin) and pycor < (max-pycor - margin) and
+      not any? obstacles-here
+    ]
+    if p != nobody [ report p ]
+    set a a - 1
+  ]
+  ;; Fallback (should be rare): center of world
+  report patch 0 0
+end
+
+;; Find a safe spot around (cx, cy). Expands radius until something is free.
+to-report find-safe-spot-around [cx cy spread myr]
+  let world-max max (list world-width world-height)
+
+  ;; If literally nowhere is legal, bail early.
+  if not any? patches with [ safe-spot? pxcor pycor myr ] [
+    report list cx cy  ;; or: report nobody
+  ]
+
+  ;; Expand the search ring until we locate at least one legal patch.
+  while [ true ] [
+    let candidates patches with [
+      distancexy cx cy <= spread and
+      safe-spot? pxcor pycor myr
+    ]
+    if any? candidates [
+      let p one-of candidates
+      report list [pxcor] of p [pycor] of p
+    ]
+    set spread spread + 1
+    if spread > world-max [
+      ;; no point expanding further than the world size
+      report list cx cy  ;; or: report nobody
+    ]
+  ]
+end
+
+
+
+to spawn-groups-observer [people-count group-size]
+  ;; Call this from SETUP (observer context).
+  if people-count <= 0 or group-size <= 0 [ stop ]
+
+  ;; You said sliders ensure exact divisibility (no leftovers)
+  let num-groups people-count / group-size
+
+  ;; parameters
+  let margin     2          ;; keep group centers away from borders
+  let spread     3        ;; radius around the group center to place members
+  let tries-pt   30         ;; attempts per member to find a safe point
+  let mysize     1.2
+  let myr        mysize / 2
+
+  repeat num-groups [
+    ;; choose a fresh, random center for THIS group
+    let center    random-center-patch margin 200
+    let cx        [pxcor] of center
+    let cy        [pycor] of center
+
+    ;; new group id/color
+    set next-gid next-gid + 1
+    let gcol item ((next-gid - 1) mod (length group-colors)) group-colors
+
+    ;; create all members at once (observer-only)
+    create-people group-size [
+      let pos find-safe-spot-around cx cy spread myr
+      setxy item 0 pos item 1 pos
+      
+      ;; place and initialize
+      setxy (item 0 pos) (item 1 pos)
+      set size mysize
+      set r myr
+      set weight 70
+      set velocity (list (random-float 1 - 0.5) (random-float 1 - 0.5))
+      set gamma random-float 0.1
+
+      ;; parameters derived from radius (your table)
+      set ease-dist      10 * r
+      set avoid_dist     2 * r + 2
+      set centroid_dist  8 * r
+      set alignment_dist 4 * r
+
+      set goal-factor        6.5
+      set cohesion-factor    1.5
+      set separation-factor  2.5
+      set alignment-factor   1.5
+      set obstacle-factor    3.5
+
+      set group-id next-gid
+      set group-color gcol
+      set color group-color
+    ]
+  ]
+end

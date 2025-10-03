@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <model version="NetLogo 7.0.0" snapToGrid="false">
-  <code><![CDATA[__includes ["helpers.nls" "functions_gruops.nls"]
+  <code><![CDATA[__includes [ "helpers.nls" "functions_gruops.nls" "grouping.nls" ]
 
 ; ==========
 ; Agent-based Evacuation Model with Panic (Groups Version)
@@ -11,11 +11,16 @@ globals [
   evacuation-time
   threshold-force 
   people-exited   ; counter for people who reached exits
+  N
+  next-gid          ;; running group id counter
+  spawn-spots       ;; ordered list of obstacle-free patches
+  spot-index        ;; where we are in spawn-spots
+  group-colors      ;; palette for groups
 ]
 
 
-breed [people person] ; our agents
-breed [obstacles obstacle] ; obstacles as patches/boxes
+breed [ people person ] ; our agents
+breed [ obstacles obstacle ] ; obstacles as patches/boxes
 
 obstacles-own [
   r
@@ -46,6 +51,7 @@ people-own [
   obstacle-factor         ;;
 ]
 
+
 ; ==========
 ; SETUP
 ; ==========
@@ -56,7 +62,7 @@ to setup
   set vmax speed-max ; if we have slider we should dicide this is for having a whole simulation run on one option and not change with the slider 
   set people-exited 0
   set threshold-force 750
-  
+
   ;; initialize patch variables so booleans are really booleans
   ask patches [
     set is-exit? false
@@ -104,68 +110,30 @@ to setup
     ]
   ]
   
-
-
-  
-  
   draw-door-visibility
   
-  
-  reset-ticks
+  set N (In_groups_of_1 + In_groups_of_2 + In_groups_of_3 + In_groups_of_4 + In_groups_of_5)
 
   ;; Obstacles (example in center strip)
-  ask n-of 80 patches with [ pxcor > -5 and pxcor < 5 and pycor mod 3 = 0 ] [
+  ask n-of 80 patches with [ pxcor > -20 and pxcor < 20 and pycor mod 3 = 0 and pycor > -29 and pycor < 29] [
     sprout-obstacles 1 [
       set shape "box"
       set color gray
       set size 1.2
-      set r 0.6
+      set r (size / 2)
     ]
   ]
+  
 
-  ;; Create people (ensure they don't spawn overlapping)
-  create-people N [
-    set size 1.2
-    set r size / 2
-    set weight 70
-    set velocity (list (random-float 1 - 0.5) (random-float 1 - 0.5))
-    set gamma random-float 0.1
-    set group-id -1
-    set group-color blue
-    set color group-color
-    set ease-dist 10 * r
-    set avoid_dist 2 * r + 2
-    set centroid_dist 8 * r
-    set alignment_dist 4 * r
-    set goal-factor 6.5
-    set cohesion-factor 1.5
-    set separation-factor 2.5
-    set alignment-factor 1.5
-    set obstacle-factor 3.5
+  ;;initialize spawn globals/spots BEFORE spawning
+  init-spawn-system
+  ;; Spawn by categories (order doesn’t matter)
+  spawn-groups-observer In_groups_of_5 5
+  spawn-groups-observer In_groups_of_4 4
+  spawn-groups-observer In_groups_of_3 3
+  spawn-groups-observer In_groups_of_2 2
+  spawn-groups-observer In_groups_of_1 1
 
-    
-
-    ;; try to place this agent at a non-overlapping random position
-    let placed? false
-    let tries 0
-    setxy random-xcor random-ycor
-    while [ (not placed?) and (tries < 100) ] [
-      ifelse not would-overlap? xcor ycor [
-        set placed? true
-      ] [
-        ;; x-coordinate
-        let x random-float ((max-pxcor - min-pxcor) - 2 * r) + min-pxcor + r
-        ;; y-coordinate
-        let y random-float ((max-pycor - min-pycor) - 2 * r) + min-pycor + r
-        setxy x y
-
-        set tries tries + 1
-      ]
-    ]   
-  ]
-
-  ;; assign people into groups
-  setup-groups
   set evacuation-time 0
   reset-ticks
 end
@@ -183,7 +151,7 @@ to go
     ;; Update panic
     update-panic
     
-    if gamma >= 0.5 [ ;; If the agent’s panic level is greater than or equal to 0.5:
+    if gamma >= 0.8 [ ;; If the agent’s panic level is greater than or equal to 0.5:
       set v-new (list 0 0) ;Reset intended velocity to zero
       set separation-factor 0 ;Set cohesion, alignment, and obstacle weights to zero -to show herding behavior
       set alignment-factor 0
@@ -195,6 +163,7 @@ to go
       ;set gamma ;;;;;;; AND Here function to get mean panic from the gruop/ local agents
     ]
     
+    
     ;; This is for mixing panic between trying to move toward the exit vs. just continuing in the same direction
     set v-new v-scale v-new (1 - gamma)
     set v-new v-plus v-new velocity gamma
@@ -204,38 +173,41 @@ to go
     
     ;; Move
     let pnext v-scale-add (list xcor ycor) velocity dt
-    let nx item 0 pnext
-    let ny item 1 pnext
-
-    ifelse can-move-to nx ny and not would-overlap? nx ny [
+    let nx (item 0 pnext)
+    let ny (item 1 pnext)
+    
+    ifelse safe-spot? nx ny r [
       ;; safe: commit the move
       setxy nx ny
+      
     ] [
       ;; blocked: try smaller step in original direction
-      let damped v-scale velocity 0.5
-      let pshort v-scale-add (list xcor ycor) damped (dt * 0.5)
-      let sx item 0 pshort
-      let sy item 1 pshort
+      let damped  v-scale velocity 0.5
+      let pshort  v-scale-add (list xcor ycor) damped (dt * 0.5)
+      let sx (item 0 pshort)
+      let sy (item 1 pshort)
       
-      ifelse can-move-to sx sy and not would-overlap? sx sy [
+      ifelse safe-spot? sx sy r [
         setxy sx sy
+        
       ] [
         ;; still blocked: try a small random lateral sidestep
         let angle random-float 360
-        let step v-scale (unit (list (cos angle) (sin angle))) (dt * 0.5)
-        let rx item 0 step + xcor
-        let ry item 1 step + ycor
-        if can-move-to rx ry and not would-overlap? rx ry [
+        let step  v-scale (unit (list (cos angle) (sin angle))) (dt * 0.5)
+        let rx (item 0 step) + xcor
+        let ry (item 1 step) + ycor
+        
+        if safe-spot? rx ry r [
           setxy rx ry
         ]
       ]
     ]
-
+    
 
     ;; Optional: draw velocity arrows
     if show-vectors? [
-      let endx xcor + (item 0 velocity) * 2
-      let endy ycor + (item 1 velocity) * 2
+      let endx (xcor + (item 0 velocity) * 2)
+      let endy (ycor + (item 1 velocity) * 2)
       set color group-color
       pen-down set pen-size 1
       setxy endx endy
@@ -250,7 +222,6 @@ ask people with [ [is-exit?] of patch-here ] [
   die
 ]
 
-
   ;; Stop if everyone is near some exit
 if count people with [
   any? patches with [ is-exit? and distance myself < 2 ]
@@ -262,90 +233,32 @@ if count people with [
 
   tick
   set evacuation-time ticks * dt
-end
-
-; ==========
-; GROUP ASSIGNMENT
-; ==========
-to setup-groups
-  let group-size-list [1 5 6 7]
-  let gid 0
-  let colors [red blue green orange pink cyan violet brown]
-
-  while [count people with [group-id = -1] > 0] [
-    let gsize one-of group-size-list
-    let members people with [group-id = -1]
-    if count members < gsize [ set gsize count members ]
-
-    ;; choose a "center" for this group
-    let cx random-xcor
-    let cy random-ycor
-
-    ;; assign members and place them near the center
-    let chosen n-of gsize members
-    let gcolor item (gid mod length colors) colors
-    ask chosen [
-      set group-id gid
-      set group-color gcolor
-      set color group-color
-
-      ;; place within 1–2 patches of the group's center
-      let placed false
-      let tries 0
-      while [ (not placed) and (tries < 50) ] [
-        setxy (cx + random-float 2 - 1) (cy + random-float 2 - 1)
-        ifelse not would-overlap? xcor ycor [
-          set placed true
-        ] [
-          set tries tries + 1
-        ]
-      ]
-      if not placed [
-        let found false
-        while [ not found ] [
-          setxy random-xcor random-ycor
-          if not would-overlap? xcor ycor [ set found true ]
-        ]
-      ]
-    ]
-
-    set gid gid + 1
-  ]
 end]]></code>
   <widgets>
-    <view x="331" wrappingAllowedX="false" y="10" frameRate="30.0" minPycor="-30" height="614" showTickCounter="true" patchSize="10.0" fontSize="10" wrappingAllowedY="false" width="614" tickCounterLabel="ticks" maxPycor="30" updateMode="0" maxPxcor="30" minPxcor="-30"></view>
-    <slider x="14" step="0.1" y="67" max="2" width="184" display="speed-max" height="50" min="0.1" direction="Horizontal" default="0.4" variable="speed-max"></slider>
-    <switch x="14" y="452" height="40" on="false" variable="show-vectors?" width="184" display="show-vectors?"></switch>
-    <slider x="14" step="0.05" y="497" max="1" width="184" display="panic-smooth" height="50" min="0" direction="Horizontal" default="1.0" variable="panic-smooth"></slider>
-    <slider x="14" step="0.05" y="122" max="1" width="184" display="dt" height="50" min="0.05" direction="Horizontal" default="0.25" variable="dt"></slider>
-    <note x="967" y="13" backgroundDark="0" fontSize="20" width="150" markdown="true" height="35" textColorDark="-1" textColorLight="-16777216" backgroundLight="0">**Doors**</note>
-    <slider x="967" step="1" y="52" max="50" width="150" display="vis-door1" height="50" min="1" direction="Horizontal" default="25.0" variable="vis-door1"></slider>
-    <slider x="1123" step="1" y="52" max="50" width="150" display="vis-door2" height="50" min="1" direction="Horizontal" default="20.0" variable="vis-door2"></slider>
-    <slider x="967" step="1" y="106" max="50" width="150" display="vis-door3" height="50" min="1" direction="Horizontal" default="50.0" variable="vis-door3"></slider>
-    <slider x="1123" step="1" y="106" max="50" width="150" display="vis-door4" height="50" min="1" direction="Horizontal" default="10.0" variable="vis-door4"></slider>
-    <slider x="14" step="0.1" y="67" max="2" width="150" display="speed-max" height="50" min="0.1" direction="Horizontal" default="0.4" variable="speed-max"></slider>
-    <slider x="16" step="1" y="17" max="300" width="150" display="N" height="50" min="0" direction="Horizontal" default="111.0" variable="N"></slider>
-    <button x="14" y="553" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="92">Setup</button>
-    <button x="111" y="553" height="40" disableUntilTicks="false" forever="true" kind="Observer" width="92">go</button>
-    <monitor x="966" precision="1" y="159" height="60" fontSize="11" width="100">people-exited</monitor>
-    <slider x="14" step="0.1" y="232" max="2" width="150" display="ms" height="50" min="0" direction="Horizontal" default="0.8" variable="ms"></slider>
-    <slider x="14" step="0.1" y="287" max="2" width="150" display="ml" height="50" min="0" direction="Horizontal" default="0.9" variable="ml"></slider>
-    <slider x="14" step="0.1" y="342" max="2" width="150" display="mg" height="50" min="0" direction="Horizontal" default="0.9" variable="mg"></slider>
-    <slider x="14" step="0.1" y="397" max="2" width="150" display="mo" height="50" min="0" direction="Horizontal" default="1.2" variable="mo"></slider>
-    <slider x="14" step="0.1" y="177" max="2" width="150" display="mc" height="50" min="0" direction="Horizontal" default="0.6" variable="mc"></slider>
-    <slider x="170" step="1" y="16" max="20" width="150" display="dc" height="50" min="1" direction="Horizontal" default="14.0" variable="dc"></slider>
-    <slider x="169" step="1" y="69" max="20" width="150" display="da" height="50" min="1" direction="Horizontal" default="12.0" variable="da"></slider>
-    <slider x="170" step="1" y="124" max="20" width="150" display="dl" height="50" min="1" direction="Horizontal" default="11.0" variable="dl"></slider>
-    <slider x="168" step="1" y="178" max="20" width="150" display="de" height="50" min="1" direction="Horizontal" default="12.0" variable="de"></slider>
-    <monitor x="964" precision="0" y="232" height="81" fontSize="30" width="162" display="Total number of people">pct1 + pct2 + pct3 + pct5</monitor>
-    <monitor x="1127" precision="0" y="315" height="60" fontSize="11" width="100" display="Groups of 1">pct1 / 1</monitor>
-    <monitor x="1127" precision="0" y="379" height="60" fontSize="11" width="100" display="Groups of 2">pct2 / 2</monitor>
-    <monitor x="1129" precision="0" y="442" height="60" fontSize="11" width="100" display="Groups of 3">pct3 / 3</monitor>
-    <monitor x="1130" precision="0" y="508" height="60" fontSize="11" width="100" display="Groups of 5">pct5 / 5</monitor>
-    <slider x="968" step="5" y="492" max="100" width="150" display="pct5" height="50" min="0" direction="Horizontal" default="75.0" variable="pct5"></slider>
-    <slider x="967" step="3" y="435" max="100" width="150" display="pct3" height="50" min="0" direction="Horizontal" default="36.0" variable="pct3"></slider>
-    <slider x="966" step="2" y="379" max="100" width="150" display="pct2" height="50" min="0" direction="Horizontal" default="42.0" variable="pct2"></slider>
-    <slider x="966" step="1" y="321" max="100" width="150" display="pct1" height="50" min="0" direction="Horizontal" default="69.0" variable="pct1"></slider>
+    <view x="377" wrappingAllowedX="false" y="10" frameRate="30.0" minPycor="-30" height="614" showTickCounter="true" patchSize="10.0" fontSize="10" wrappingAllowedY="false" width="614" tickCounterLabel="ticks" maxPycor="30" updateMode="0" maxPxcor="30" minPxcor="-30"></view>
+    <button x="111" y="601" height="40" disableUntilTicks="false" forever="true" kind="Observer" width="92">go</button>
+    <button x="11" y="601" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="92">Setup</button>
+    <monitor x="227" precision="0" y="350" height="60" fontSize="11" width="100" display="Groups of 4">In_groups_of_4 / 4</monitor>
+    <monitor x="227" precision="0" y="282" height="60" fontSize="11" width="100" display="Groups of 3">In_groups_of_3 / 3</monitor>
+    <monitor x="227" precision="0" y="214" height="60" fontSize="11" width="100" display="Groups of 2">In_groups_of_2 / 2</monitor>
+    <slider x="11" step="3" y="282" max="100" width="208" display="In_groups_of_3" height="60" min="0" direction="Horizontal" default="21.0" variable="In_groups_of_3" units="people"></slider>
+    <slider x="11" step="4" y="350" max="100" width="208" display="In_groups_of_4" height="60" min="0" direction="Horizontal" default="40.0" variable="In_groups_of_4" units="people"></slider>
+    <slider x="11" step="2" y="214" max="100" width="208" display="In_groups_of_2" height="60" min="0" direction="Horizontal" default="50.0" variable="In_groups_of_2" units="people"></slider>
+    <monitor x="227" precision="17" y="415" height="60" fontSize="11" width="100" display="Groups of 5">In_groups_of_5 / 5</monitor>
+    <slider x="11" step="5" y="415" max="100" width="208" display="In_groups_of_5" height="60" min="0" direction="Horizontal" default="60.0" variable="In_groups_of_5" units="people"></slider>
+    <monitor x="227" precision="0" y="146" height="60" fontSize="11" width="100" display="Groups of 1">In_groups_of_1 / 1</monitor>
+    <slider x="11" step="1" y="146" max="100" width="208" display="In_groups_of_1" height="60" min="0" direction="Horizontal" default="17.0" variable="In_groups_of_1" units="people"></slider>
+    <note x="1001" y="11" backgroundDark="0" fontSize="20" width="150" markdown="true" height="35" textColorDark="-1" textColorLight="-16777216" backgroundLight="0">**Doors**</note>
+    <monitor x="1001" precision="1" y="271" height="60" fontSize="11" width="100">people-exited</monitor>
+    <slider x="1001" step="1" y="216" max="50" width="150" display="vis-door4" height="50" min="1" direction="Horizontal" default="26.0" variable="vis-door4"></slider>
+    <slider x="1001" step="1" y="161" max="50" width="150" display="vis-door2" height="50" min="1" direction="Horizontal" default="32.0" variable="vis-door2"></slider>
+    <slider x="1001" step="1" y="106" max="50" width="150" display="vis-door3" height="50" min="1" direction="Horizontal" default="38.0" variable="vis-door3"></slider>
+    <slider x="1001" step="1" y="51" max="50" width="150" display="vis-door1" height="50" min="1" direction="Horizontal" default="24.0" variable="vis-door1"></slider>
+    <monitor x="171" precision="0" y="16" height="81" fontSize="30" width="162" display="Total number of people">In_groups_of_1 + In_groups_of_2 + In_groups_of_3 + In_groups_of_4 + In_groups_of_5</monitor>
+    <slider x="11" step="0.05" y="16" max="1" width="150" display="dt" height="50" min="0.05" direction="Horizontal" default="0.25" variable="dt"></slider>
+    <slider x="11" step="0.1" y="75" max="2" width="150" display="speed-max" height="50" min="0.1" direction="Horizontal" default="1.4" variable="speed-max"></slider>
+    <switch x="11" y="486" height="50" on="false" variable="show-vectors?" width="148" display="show-vectors?"></switch>
+    <slider x="11" step="0.05" y="544" max="1" width="150" display="panic-smooth" height="50" min="0" direction="Horizontal" default="0.4" variable="panic-smooth"></slider>
   </widgets>
   <info>## WHAT IS IT?
 
