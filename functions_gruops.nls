@@ -1,4 +1,3 @@
-
 ; ==========
 ; BEHAVIOR COMPONENTS
 ; ==========
@@ -12,7 +11,7 @@ end
 
 to-report cohesion-component
   ;for every agent in a spesific rediuos you want to go in a mean diraction of positioof the agents around you
-  let ns other people with [group-id = [group-id] of myself] in-radius dc
+  let ns other people with [group-id = [group-id] of myself] in-radius centroid_dist
   if any? ns [
     let cx mean [ xcor ] of ns
     let cy mean [ ycor ] of ns
@@ -23,7 +22,7 @@ end
 
 to-report separation-component
   ; 
-  let ns other people with [group-id = [group-id] of myself] in-radius da
+  let ns other people with [group-id = [group-id] of myself] in-radius avoid_dist
   if any? ns [
     let away list 0 0
     foreach sort ns [ neighbor ->
@@ -39,7 +38,7 @@ end
 
 
 to-report alignment-component
-  let ns other people with [group-id = [group-id] of myself] in-radius dl
+  let ns other people with [group-id = [group-id] of myself] in-radius alignment_dist
   if any? ns [
     let vx mean [ item 0 velocity ] of ns
     let vy mean [ item 1 velocity ] of ns
@@ -49,7 +48,7 @@ to-report alignment-component
 end
 
 to-report obstacle-component
-  let obs obstacles in-radius de
+  let obs obstacles in-radius ease-dist
   if any? obs [
     let away list 0 0
     foreach sort obs [ ob ->
@@ -71,10 +70,10 @@ to-report MOVE
 
   ;; weighted sum of components
     ;;;;;;;;;;;;;;;; let v-new v-plus (list 0 0) v-goal mg
-  let v-new v-plus (list 0 0) v-coh mc
-  set v-new v-plus v-new v-sep ms
-  set v-new v-plus v-new v-ali ml
-  set v-new v-plus v-new v-obs mo
+  let v-new v-plus (list 0 0) v-coh cohesion-factor
+  set v-new v-plus v-new v-sep separation-factor
+  set v-new v-plus v-new v-ali alignment-factor
+  set v-new v-plus v-new v-obs obstacle-factor
   
   report v-new
 end
@@ -84,8 +83,7 @@ end
 ; ==========
 
 ;; True if my circle at (nx, ny) would overlap any neighbor's circle
-to-report would-overlap? [nx ny]
-  let myr r
+to-report would-overlap? [nx ny myr]
   ;; Only check nearby agents to keep it fast:
   let candidates other turtles in-radius (myr + 2)   ;; inflate a bit; or use vmax*dt
   report any? candidates with [
@@ -106,7 +104,7 @@ to update-panic
   let delta1 max list 0 ((D - ease-dist) / L)
 
   ;; δ2: mismatch with neighbors
-  let ns other people with [group-id = [group-id] of myself] in-radius dl
+  let ns other people with [group-id = [group-id] of myself] in-radius alignment_dist
   let delta2 0
   if any? ns [
     let vmean list (mean [ item 0 velocity ] of ns) (mean [ item 1 velocity ] of ns)
@@ -115,7 +113,7 @@ to update-panic
   ]
 
   ;; δ3: neighbors in discomfort (proxy: very slow agents)
-  let nsC other people with [group-id = [group-id] of myself] in-radius dc
+  let nsC other people with [group-id = [group-id] of myself] in-radius centroid_dist
   let delta3 0
   if any? nsC [
     set delta3 (count nsC with [ v-mag velocity < 0.2 * vmax ]) / (count nsC)
