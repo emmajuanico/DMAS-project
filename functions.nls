@@ -34,10 +34,6 @@ to draw-door-visibility
 end
 
 
-
-
-
-
 to-report cohesion-component
   ;for every agent in a spesific rediuos you want to go in a mean diraction of positioof the agents around you
   let ns other people in-radius dc

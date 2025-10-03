@@ -6,8 +6,11 @@
 ; Agent-based Evacuation Model with Panic (Starter)
 ; ==========
 
-globals [ vmax ]
-;vmax is just max velocity
+globals [ 
+  vmax ;vmax is just max velocity
+  people-exited   ; counter for people who reached exits
+]
+
 
 breed [people person] ; our agents
 breed [obstacles obstacle] ; need to be change as our obstacles are gone be baised on paches
@@ -38,7 +41,7 @@ to setup
   resize-world -30 30 -30 30
   set-patch-size 10
   set vmax speed-max ; if we have slider we should dicide this is for having a whole simulation run on one option and not change with the slider 
-  
+  set people-exited 0
   
   ;; initialize patch variables so booleans are really booleans
   ask patches [
@@ -173,14 +176,20 @@ to go
       setxy (item 0 pnext) (item 1 pnext)
     ]
 ]
+  
+ ;; remove agents at exits
+ask people with [ [is-exit?] of patch-here ] [
+  set people-exited people-exited + 1
+  die
+]
+
+
   ;; Stop if everyone is near some exit
 if count people with [
   any? patches with [ is-exit? and distance myself < 2 ]
 ] = count people [
   stop
 ]
-
-
 
   tick
 end
@@ -208,6 +217,7 @@ end
     <slider x="1123" step="1" y="106" max="50" width="150" display="vis-door4" height="50" min="1" direction="Horizontal" default="10.0" variable="vis-door4"></slider>
     <button x="14" y="553" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="92">Setup</button>
     <button x="111" y="553" height="40" disableUntilTicks="false" forever="true" kind="Observer" width="92">go</button>
+    <monitor x="966" precision="1" y="159" height="60" fontSize="11" width="100">people-exited</monitor>
   </widgets>
   <info>## WHAT IS IT?
 
