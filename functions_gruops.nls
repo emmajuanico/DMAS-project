@@ -2,13 +2,37 @@
 ; ==========
 ; BEHAVIOR COMPONENTS
 ; ==========
-to-report goal-component 
-  ; this needs to be change cause we have multipule exits also exits visibility needs to be included here
-  ; if it's not visibule it should be (0,0)
-  let gx [pxcor] of goal-pos
-  let gy [pycor] of  goal-pos
-  report unit (vector-to gx gy)
+to-report goal-component
+  ;; check patches marked as exits that are visible
+  let visible-exits patches with [
+    is-exit? and distance myself <= visibility
+  ]
+  
+  if any? visible-exits [
+    ;; closest exit patch
+    let closest min-one-of visible-exits [ distance myself ]
+    report unit (vector-to [pxcor] of closest [pycor] of closest)
+  ]
+  
+  ;; no exit visible
+  report list 0 0
 end
+
+
+to draw-door-visibility
+  clear-drawing
+  
+  ask patches with [is-exit? and is-main-exit?] [
+    sprout 1 [
+      set shape "circle empty"
+      set color green
+      set size visibility * 2
+      stamp
+      die
+    ]
+  ]
+end
+
 
 to-report cohesion-component
   ;for every agent in a spesific rediuos you want to go in a mean diraction of positioof the agents around you
@@ -99,9 +123,23 @@ end
 ; ==========
 to update-panic
   ;; δ1: distance to goal vs ease distance
-  let gx [pxcor] of goal-pos
-  let gy [pycor] of goal-pos
-  let D distancexy gx gy
+  ;; compute distance to closest visible exit
+  let visible-exits patches with [
+  is-exit? and distance myself <= visibility
+  ]
+  let D 0
+  
+  if any? visible-exits [
+    let closest min-one-of visible-exits [ distance myself ]
+    set D distance closest
+  ] 
+  ;; if no exit is visible, use nearest exit anyway
+  if not any? visible-exits [
+    let closest min-one-of patches with [is-exit?] [ distance myself ]
+    set D distance closest
+  ]
+  
+
   let L max (list world-width world-height)
   let delta1 max list 0 ((D - ease-dist) / L)
 
