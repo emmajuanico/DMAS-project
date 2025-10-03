@@ -1,0 +1,112 @@
+__includes ["helpers.nls" "functions_wg.nls" "grouping.nls"]
+
+; ==========
+; Agent-based Evacuation Model with Panic (Groups Version)
+; ==========
+
+globals [
+  goal-pos vmax ;goal-pos is a variable that saves the patch that the exit is in
+                ;vmax is just max velocity
+  people-total
+  groups1 groups2 groups3 groups5
+]
+
+
+breed [people person] ; our agents
+breed [obstacles obstacle] ; obstacles as patches/boxes
+
+people-own [
+  r              ;; the size of the agent
+  weight
+  velocity
+  gamma          ;; panic factor
+  ease-dist      ;; distance to the exit in which the panic is not increasing
+  group-id       ;; ID of the group this person belongs to
+  group-color    ;; color assigned to the group
+]
+
+; ==========
+; SETUP
+; ==========
+to setup
+  clear-all
+
+  ;; world & drawing
+  resize-world -30 30 -30 30
+  set-patch-size 10
+
+  ;; sim params from UI
+  set vmax speed-max                    ;; slider: speed-max
+  set goal-pos one-of patches with [ pxcor = max-pxcor ]   ;; exit at right edge
+
+  ;; example obstacles (keep/change as you like)
+  ask n-of 80 patches with [ pxcor > -5 and pxcor < 5 and pycor mod 3 = 0 ] [
+    sprout-obstacles 1 [
+      set shape "box"
+      set color gray
+      set size 1.2
+    ]
+  ]
+  plan-and-spawn-people
+  ;; build groups from percentage sliders (pct1, pct2, pct3, pct5) and N_total,
+  ;; create turtles deterministically, assign group-id/color, and set monitors
+
+
+
+  reset-ticks
+end
+
+
+; ==========
+; MAIN LOOP
+; ==========
+to go
+  ; calculating all the directions (unit vectors) that we want to go in
+  ask people [
+    let v-goal goal-component
+    let v-coh  cohesion-component
+    let v-sep  separation-component
+    let v-ali  alignment-component
+    let v-obs  obstacle-component
+
+    ;; weighted sum of components
+    let v-new v-plus (list 0 0) v-goal mg
+    set v-new v-plus v-new v-coh mc
+    set v-new v-plus v-new v-sep ms
+    set v-new v-plus v-new v-ali ml
+    set v-new v-plus v-new v-obs mo
+
+    ;; Limit speed
+    set velocity limit-speed v-new vmax
+
+    ;; Update panic
+    update-panic
+
+    ;; Move
+    let pnext v-scale-add (list xcor ycor) velocity dt
+    ifelse can-move-to (item 0 pnext) (item 1 pnext)
+    [ setxy (item 0 pnext) (item 1 pnext) ]
+    [ set velocity v-scale velocity 0.2 ]  ;; damp if out of bounds
+
+    ;; Optional: draw velocity arrows (requires switch show-vectors?)
+    if show-vectors? [
+      let endx xcor + (item 0 velocity) * 2
+      let endy ycor + (item 1 velocity) * 2
+      set color group-color
+      pen-down set pen-size 1
+      setxy endx endy
+      pen-up
+      setxy (item 0 pnext) (item 1 pnext)
+    ]
+  ]
+
+  ;; Stop if everyone is near the exit
+  if count people with [ distancexy ([pxcor] of goal-pos) ([pycor] of goal-pos) < 2 ] = count people [
+    stop
+  ]
+
+  tick
+end
+
+
+end

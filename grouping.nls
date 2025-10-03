@@ -1,0 +1,162 @@
+;; -----------------------------------------
+;; 1) Normalize the four % sliders to 100
+;; -----------------------------------------
+to normalize-percents-4
+  ;; Raw sum of the four sliders (user may not total exactly 100)
+  let s (pct1 + pct2 + pct3 + pct5)
+
+  ;; Edge case: if all are zero, default to 100% singles
+  if s <= 0 [
+    set pct1 100 set pct2 0 set pct3 0 set pct5 0
+    stop
+  ]
+
+  ;; Compute integer percentages that sum to 100
+  let p1 round (100 * pct1 / s)
+  let p2 round (100 * pct2 / s)
+  let p3 round (100 * pct3 / s)
+  ;; Last bucket gets the remainder to guarantee p1+p2+p3+p5 = 100
+  let p5 100 - p1 - p2 - p3
+
+  ;; If rounding made p5 negative, borrow from p3 (never go below 0)
+  if p5 < 0 [ set p3 max list 0 (p3 + p5)  set p5 0 ]
+
+  ;; Write normalized values back so monitors/GUI reflect the normalization
+  set pct1 p1
+  set pct2 p2
+  set pct3 p3
+  set pct5 p5
+end
+
+
+;; -----------------------------------------------------------
+;; 2) Build a deterministic plan from % and N (no randomness)
+;;    Returns a list like [5 5 3 2 1 1 ...] whose SUM = N
+;; -----------------------------------------------------------
+to-report build-group-plan-1235 [nTarget]
+  normalize-percents-4
+
+  ;; Translate percentages into PEOPLE per bucket (rounded)
+  let p1 round (pct1 * nTarget / 100)
+  let p2 round (pct2 * nTarget / 100)
+  let p3 round (pct3 * nTarget / 100)
+  let p5 round (pct5 * nTarget / 100)
+
+  ;; Fix any rounding drift so p1+p2+p3+p5 == N (put residual into singles)
+  let diff (nTarget - (p1 + p2 + p3 + p5))
+  set p1 p1 + diff
+
+  ;; Whole groups in each bucket
+  let g5 floor (p5 / 5)
+  let g3 floor (p3 / 3)
+  let g2 floor (p2 / 2)
+  let g1 p1                   ;; singles are already “whole groups”
+
+  ;; STRICT leftovers policy: ALL remainders → singles
+  ;;   (5s) remainder (0..4)  → that many 1-person groups
+  ;;   (3s) remainder (0..2)  → that many 1-person groups
+  ;;   (2s) remainder (0..1)  → that many 1-person groups
+  set g1 g1 + (p5 - 5 * g5) + (p3 - 3 * g3) + (p2 - 2 * g2)
+
+  ;; Publish monitors (group COUNTS + total people)
+  set groups1 g1
+  set groups2 g2
+  set groups3 g3
+  set groups5 g5
+  set people-total (g1 + 2 * g2 + 3 * g3 + 5 * g5)
+
+  ;; Deterministic plan order (nice & stable for debugging/visuals)
+  report (sentence (repeat-item 5 g5)
+                   (repeat-item 3 g3)
+                   (repeat-item 2 g2)
+                   (repeat-item 1 g1))
+end
+
+
+;; Utility: make a list of k copies of value v
+to-report repeat-item [v k]
+  let out []
+  if k <= 0 [ report out ]
+  repeat k [ set out lput v out ]
+  report out
+end
+
+
+;; -------------------------------------------------
+;; 3) Deterministic list of usable spawn “spots”
+;;    (non-obstacle patches, ordered top→bottom, left→right)
+;; -------------------------------------------------
+to-report floor-patches-ordered
+  let margin 1
+  let candidates patches with [
+    pxcor > (min-pxcor + margin) and pxcor < (max-pxcor - margin) and
+    pycor > (min-pycor + margin) and pycor < (max-pycor - margin) and
+    not any? obstacles-here
+  ]
+  report sort-by
+    [[a b] ->
+      ( [pycor] of a > [pycor] of b ) or
+      ( ([pycor] of a = [pycor] of b) and ([pxcor] of a < [pxcor] of b) )
+    ]
+    candidates
+end
+
+
+;; -------------------------------------------------------------------
+;; 4) Main entry from setup:
+;;    - Builds plan for N people
+;;    - Spawns agents deterministically
+;;    - NO capacity trimming (we wrap through spots and add jitter)
+;; -------------------------------------------------------------------
+to plan-and-spawn-1235
+  let spots floor-patches-ordered
+
+  ;; Use your Interface slider named “N”
+  let nTarget N
+
+  ;; Plan like [5 5 3 2 1 ...]; its sum equals N (after rounding fix)
+  let plan build-group-plan-1235 nTarget
+
+  ;; Recompute counters from the plan (defensive, keeps monitors in sync)
+  set groups1 length filter [x -> x = 1] plan
+  set groups2 length filter [x -> x = 2] plan
+  set groups3 length filter [x -> x = 3] plan
+  set groups5 length filter [x -> x = 5] plan
+  set people-total sum plan
+
+  ;; Spawn:
+  ;;  - cycle through the ordered spots so we never “run out”
+  ;;  - add a small random jitter so multiple agents can share a patch visually
+  let idx 0
+  let gid 0
+  let colors [red blue green orange pink cyan violet brown]
+  let jitter 0.35     ;; ±0.35 around patch center
+
+  foreach plan [ sz ->
+    set gid gid + 1
+    let gcol item ((gid - 1) mod length colors) colors
+    repeat sz [
+      let p item (idx mod max list 1 length spots) spots
+      set idx idx + 1
+
+      let jx ([pxcor] of p) + (random-float (2 * jitter) - jitter)
+      let jy ([pycor] of p) + (random-float (2 * jitter) - jitter)
+
+      create-people 1 [
+        setxy jx jy
+        set size 1.2
+        set r 0.5
+        set weight 70
+        set velocity (list 0 0)
+        set gamma 0
+        set ease-dist 15
+        set group-id gid
+        set group-color gcol
+        set color group-color
+      ]
+    ]
+  ]
+end
+
+
+
