@@ -36,7 +36,7 @@ end
 
 to-report cohesion-component
   ;for every agent in a spesific rediuos you want to go in a mean diraction of positioof the agents around you
-  let ns other people in-radius dc
+  let ns other people with [group-id = [group-id] of myself] in-radius dc
   if any? ns [
     let cx mean [ xcor ] of ns
     let cy mean [ ycor ] of ns
@@ -47,7 +47,7 @@ end
 
 to-report separation-component
   ; 
-  let ns other people in-radius da
+  let ns other people with [group-id = [group-id] of myself] in-radius da
   if any? ns [
     let away list 0 0
     foreach sort ns [ neighbor ->
@@ -63,7 +63,7 @@ end
 
 
 to-report alignment-component
-  let ns other people in-radius dl
+  let ns other people with [group-id = [group-id] of myself] in-radius dl
   if any? ns [
     let vx mean [ item 0 velocity ] of ns
     let vy mean [ item 1 velocity ] of ns
@@ -84,6 +84,37 @@ to-report obstacle-component
     report unit away
   ]
   report list 0 0
+end
+
+to-report MOVE
+      ;;;;;;;;;;;;;;; let v-goal goal-component
+  let v-coh  cohesion-component
+  let v-sep  separation-component
+  let v-ali  alignment-component    
+  let v-obs  obstacle-component
+
+  ;; weighted sum of components
+    ;;;;;;;;;;;;;;;; let v-new v-plus (list 0 0) v-goal mg
+  let v-new v-plus (list 0 0) v-coh mc
+  set v-new v-plus v-new v-sep ms
+  set v-new v-plus v-new v-ali ml
+  set v-new v-plus v-new v-obs mo
+  
+  report v-new
+end
+
+; ==========
+; OVERLAP & OBSTACULES
+; ==========
+
+;; True if my circle at (nx, ny) would overlap any neighbor's circle
+to-report would-overlap? [nx ny]
+  let myr r
+  ;; Only check nearby agents to keep it fast:
+  let candidates other turtles in-radius (myr + 2)   ;; inflate a bit; or use vmax*dt
+  report any? candidates with [
+    (distancexy nx ny) < (myr + r)   ;; r here is the neighbor's radius
+  ]
 end
 
 
@@ -113,7 +144,7 @@ to update-panic
   let delta1 max list 0 ((D - ease-dist) / L)
 
   ;; δ2: mismatch with neighbors
-  let ns other people in-radius dl
+  let ns other people with [group-id = [group-id] of myself] in-radius dl
   let delta2 0
   if any? ns [
     let vmean list (mean [ item 0 velocity ] of ns) (mean [ item 1 velocity ] of ns)
@@ -122,7 +153,7 @@ to update-panic
   ]
 
   ;; δ3: neighbors in discomfort (proxy: very slow agents)
-  let nsC other people in-radius dc
+  let nsC other people with [group-id = [group-id] of myself] in-radius dc
   let delta3 0
   if any? nsC [
     set delta3 (count nsC with [ v-mag velocity < 0.2 * vmax ]) / (count nsC)
