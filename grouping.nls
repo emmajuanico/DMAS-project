@@ -80,7 +80,6 @@ to-report find-safe-spot-around [cx cy spread myr]
 end
 
 
-
 to spawn-groups-observer [people-count group-size]
   ;; Call this from SETUP (observer context).
   if people-count <= 0 or group-size <= 0 [ stop ]
@@ -90,9 +89,9 @@ to spawn-groups-observer [people-count group-size]
 
   ;; parameters
   let margin     2          ;; keep group centers away from borders
-  let spread     3        ;; radius around the group center to place members
+  let spread     (3 / meters-per-patch)       ;; radius around the group center to place members
   let tries-pt   30         ;; attempts per member to find a safe point
-  let mysize     1.2
+  let mysize     0.8
   let myr        mysize / 2
 
   repeat num-groups [
@@ -107,13 +106,13 @@ to spawn-groups-observer [people-count group-size]
 
     ;; create all members at once (observer-only)
     create-people group-size [
-      let pos find-safe-spot-around cx cy spread myr
+      let pos find-safe-spot-around cx cy spread (myr / meters-per-patch)
       setxy item 0 pos item 1 pos
       
       ;; place and initialize
       setxy (item 0 pos) (item 1 pos)
-      set size mysize
-      set r myr
+      set size mysize / meters-per-patch
+      set r (myr / meters-per-patch)
       set weight 70
       set velocity (list (random-float 1 - 0.5) (random-float 1 - 0.5))
       set gamma random-float 0.1

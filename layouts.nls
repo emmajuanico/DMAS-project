@@ -1,0 +1,277 @@
+;; POSSIBLE LAYOUTS - RANODM, CINEMA 
+
+
+;; CENTER RANDOM STRIP
+to layout-center-strip
+  ;; Example: your current center strip layout
+  let obs-left-x   -5   ;; meters
+  let obs-right-x   5
+  let obs-lower-y  -10
+  let obs-upper-y   10
+  let obs-size-m    1   ;; meters
+
+  ;; Convert to patch coords
+  set obs-left-x   (obs-left-x / meters-per-patch)
+  set obs-right-x  (obs-right-x / meters-per-patch)
+  set obs-lower-y  (obs-lower-y / meters-per-patch)
+  set obs-upper-y  (obs-upper-y / meters-per-patch)
+  let obs-size (obs-size-m / meters-per-patch)
+
+  ask n-of 80 patches with [
+    pxcor > obs-left-x and pxcor < obs-right-x and
+    pycor mod 3 = 0 and
+    pycor > obs-lower-y and pycor < obs-upper-y
+  ] [
+    sprout-obstacles 1 [
+      set shape "box"
+      set color gray
+      set size obs-size
+      set r (obs-size / 2)
+    ]
+  ]
+end
+
+
+to layout-cinema
+  ;; ========== PARAMETERS ==========
+  let seat-size-m       1        ;; meters per chair (vertical size of obstacle)
+  let seat-spacing-m    0        ;; space between seats horizontally (meters)
+  let row-spacing-m     0.7      ;; space between rows (meters) 
+  let side-block-seats  5        ;; seats per lateral block (count of obstacles)
+  let middle-block-seats 10      ;; seats in the center block (count of obstacles)
+  let num-rows          12       ;; number of seat rows
+
+  ;; Convert to patch coordinates (work with integers to align to patches)
+  let seat-size (seat-size-m / meters-per-patch)
+  let seat-spacing (seat-spacing-m / meters-per-patch)
+  let row-spacing (row-spacing-m / meters-per-patch)
+
+  let seat-size-patches round seat-size
+  let seat-spacing-patches round seat-spacing
+  let row-spacing-patches row-spacing  ;; keep fractional allowed for y stepping
+  let step (seat-size-patches + seat-spacing-patches) ;; horizontal step between centers
+
+  ;; World boundaries (patch coords)
+  let left-wall min-pxcor
+  let right-wall max-pxcor
+
+  ;; starting y (bottom) — you were using bottom + offset
+  let bottom min-pycor + 5
+  let y bottom
+
+  ;; skip the 2nd and 3rd to last rows:
+  ;; indices run 0 .. num-rows-1; we skip i = num-rows-10 and i = num-rows-11
+  let i 0
+  repeat num-rows [
+    if not (i = (num-rows - 10) or i = (num-rows - 11)) [
+      ;; ---- LEFT BLOCK (touching left wall) ----
+      ;; place the first seat center so the left edge of that seat touches the left wall
+      ;; center offset from left wall:
+      let left_center_offset round (seat-size-patches / 2)
+      let left_start_x (left-wall + left_center_offset)
+
+      ;; create left block seats left -> right
+      let lx left_start_x
+      repeat side-block-seats [
+        create-seat lx y seat-size
+        set lx lx + step
+      ]
+
+      ;; last left seat center:
+      let last_left_center lx - step
+
+      ;; ---- RIGHT BLOCK (touching right wall) ----
+      let right_center_offset round (seat-size-patches / 2)
+      let right_start_center (right-wall - right_center_offset)
+
+      ;; place right block seats right -> left (we'll create them left-to-right below by computing the first center)
+      let first_right_center (right_start_center - ( (side-block-seats - 1) * step) )
+      let rx first_right_center
+      repeat side-block-seats [
+        create-seat rx y seat-size
+        set rx rx + step
+      ]
+
+      ;; last right seat center is rx - step
+
+      ;; ---- MIDDLE BLOCK (centered with equal aisles) ----
+      let middle_width ((middle-block-seats - 1) * step)
+      
+      ;; Available space between last left and first right
+      let available_space (first_right_center - last_left_center - middle_width)
+      
+      ;; Compute aisle width (evenly split the space)
+      let aisle_width floor (available_space / 2)
+      
+      ;; Ensure at least 2 steps (minimum aisle size)
+      if aisle_width < 2 [ set aisle_width 2 ]
+      
+      ;; Now recalculate middle placement based on centered aisles
+      let middle_first_candidate (last_left_center + aisle_width)
+      let middle_last_allowed (first_right_center - aisle_width)
+      
+      ;; Check if there's enough space (else compress)
+      ifelse middle_last_allowed - middle_first_candidate < middle_width [
+        ;; not enough space: compress seats
+        ifelse middle-block-seats > 1 [
+          let available (middle_last_allowed - middle_first_candidate)
+          let compressed_step floor (available / (middle-block-seats - 1))
+          if compressed_step < 1 [ set compressed_step 1 ]
+          let mx middle_first_candidate
+          repeat middle-block-seats [
+            create-seat mx y seat-size
+            set mx mx + compressed_step
+          ]
+        ] [
+          ;; only one middle obstacle: place centered in available space
+          let center_x round ((middle_first_candidate + middle_last_allowed) / 2)
+          create-seat center_x y seat-size
+        ]
+      ] [
+        ;; normal case: place middle block with regular step
+        let mx middle_first_candidate
+        repeat middle-block-seats [
+          create-seat mx y seat-size
+          set mx mx + step
+        ]
+      ]
+
+    ]
+    ;; next row (move upwards)
+    set y y + seat-size + row-spacing
+    set i i + 1
+  ]
+end
+
+to create-seat [x y seat-size]
+  ask patch round x round y [
+    sprout-obstacles 1 [
+      set shape "box"
+      set color gray
+      set size seat-size
+      set r (seat-size / 2)
+    ]
+  ]
+end
+
+to spawn-cinema
+  ;; ============================
+  ;; SPAWN AGENTS IN CINEMA LAYOUT
+  ;; ============================
+
+  ;; PARAMETERS
+  let mysize 0.8
+  let myr mysize / 2
+  let spread 0.05 / meters-per-patch  ;; small jitter for visual variety
+
+  ;; ensure group colors are initialized
+  if not (is-list? group-colors) or length group-colors = 0 [
+    set group-colors [ red blue green orange pink cyan violet brown ]
+  ]
+
+  ;; Collect all chair turtles (obstacles)
+  let chairs-list sort turtles with [breed = obstacles]
+
+  ;; Shuffle chairs to randomize group placement
+  let available-chairs shuffle chairs-list
+
+  ;; Define group types as [total-members group-size]
+  let all-groups (list
+    (list In_groups_of_5 5)
+    (list In_groups_of_4 4)
+    (list In_groups_of_3 3)
+    (list In_groups_of_2 2)
+    (list In_groups_of_1 1)
+  )
+
+  ;; Loop over each group type
+  foreach all-groups [ group-info ->
+    let people-count first group-info
+    let group-size last group-info
+
+    if people-count > 0 and group-size > 0 [
+      let num-groups people-count / group-size
+
+      repeat num-groups [
+        ;; Find a sequence of adjacent seats
+        let selected-seats []
+        let found? false
+
+        ;; Try to find seats in the same row
+        foreach available-chairs [ chair ->
+          if not found? [
+            let row-y [pycor] of chair
+            let row-chairs sort-by [ [a b] -> [pxcor] of a < [pxcor] of b ] (filter [ x -> [pycor] of x = row-y ] available-chairs)
+
+            ;; Check for enough adjacent seats
+            if length row-chairs >= group-size [
+              set selected-seats sublist row-chairs 0 group-size
+              set found? true
+            ]
+          ]
+        ]
+
+        ;; If no adjacent seats found, pick nearest available chairs
+        if not found? [
+          set selected-seats sublist available-chairs 0 group-size
+        ]
+
+        ;; Remove selected seats from available chairs
+        foreach selected-seats [ ch -> set available-chairs remove ch available-chairs ]
+
+        ;; new group id/color
+        set next-gid next-gid + 1
+        let gcol item ((next-gid - 1) mod (length group-colors)) group-colors
+
+        ;; spawn each member in the corresponding seat
+        foreach selected-seats [ ch ->
+          let cx [pxcor] of ch
+          let cy [pycor] of ch + [r] of ch + myr / meters-per-patch
+
+          create-people 1 [
+            ;; small jitter around chair
+            let jitter-x (random-float spread - spread / 2)
+            let jitter-y (random-float spread - spread / 2)
+            setxy (cx + jitter-x) (cy + jitter-y)
+
+            ;; agent properties
+            set size mysize / meters-per-patch
+            set r myr / meters-per-patch
+            set weight 70
+            let dir unit (list (random-float 1 - 0.5) (random-float 1 - 0.5))
+            set velocity v-scale dir (0.2 * vmax)
+            set gamma random-float 0.1
+
+            ;; behavioral parameters
+            set ease-dist      10 * r
+            set avoid_dist     2 * r + 2
+            set centroid_dist  8 * r
+            set alignment_dist 4 * r
+
+            set goal-factor        6.5
+            set cohesion-factor    1.5
+            set separation-factor  2.5
+            set alignment-factor   1.5
+            set obstacle-factor    3.5
+
+            set group-id next-gid
+            set group-color gcol
+            set color group-color
+          ]
+        ]
+      ]
+    ]
+  ]
+end
+
+
+
+
+to spawn-center-strip
+  init-spawn-system
+  spawn-groups-observer In_groups_of_5 5
+  spawn-groups-observer In_groups_of_4 4
+  spawn-groups-observer In_groups_of_3 3
+  spawn-groups-observer In_groups_of_2 2
+  spawn-groups-observer In_groups_of_1 1
+end

@@ -1,6 +1,7 @@
 ; ==========
 ; BEHAVIOR COMPONENTS
 ; ==========
+
 to-report goal-component
   ;; check patches marked as exits that are visible
   let visible-exits patches with [
@@ -45,7 +46,6 @@ to-report cohesion-component
 end
 
 to-report separation-component
-  ; 
   let ns other people with [group-id = [group-id] of myself] in-radius avoid_dist
   if any? ns [
     let away list 0 0
@@ -86,14 +86,14 @@ to-report obstacle-component
 end
 
 to-report MOVE
-      ;;;;;;;;;;;;;;; let v-goal goal-component
+  ;;;;;;;;;;;;;;; let v-goal goal-component
   let v-coh  cohesion-component
   let v-sep  separation-component
   let v-ali  alignment-component    
   let v-obs  obstacle-component
 
   ;; weighted sum of components
-    ;;;;;;;;;;;;;;;; let v-new v-plus (list 0 0) v-goal mg
+  ;;;;;;;;;;;;;;;; let v-new v-plus (list 0 0) v-goal mg
   let v-new v-plus (list 0 0) v-coh cohesion-factor
   set v-new v-plus v-new v-sep separation-factor
   set v-new v-plus v-new v-ali alignment-factor
@@ -103,7 +103,7 @@ to-report MOVE
 end
 
 ; ==========
-; OVERLAP & OBSTACULES
+; OVERLAP & OBSTACLES
 ; ==========
 ;; True if a circle of radius `myr` at (nx, ny) is inside the world
 ;; and does not overlap any other turtle’s circle.
@@ -126,7 +126,6 @@ to-report safe-spot? [nx ny myr]
 end
 
 
-
 ; ==========
 ; PANIC UPDATE
 ; ==========
@@ -134,7 +133,7 @@ to update-panic
   ;; δ1: distance to goal vs ease distance
   ;; compute distance to closest visible exit
   let visible-exits patches with [
-  is-exit? and distance myself <= visibility
+    is-exit? and distance myself <= visibility
   ]
   let D 0
   
@@ -148,7 +147,6 @@ to update-panic
     set D distance closest
   ]
   
-
   let L max (list world-width world-height)
   let delta1 max list 0 ((D - ease-dist) / L)
 
