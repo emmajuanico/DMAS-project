@@ -2,15 +2,14 @@
 
 
 ;; CENTER RANDOM STRIP
+;; -------- CENTER STRIP --------
 to layout-center-strip
-  ;; Example: your current center strip layout
-  let obs-left-x   -5   ;; meters
+  let obs-left-x   -5
   let obs-right-x   5
   let obs-lower-y  -10
   let obs-upper-y   10
-  let obs-size-m    1   ;; meters
+  let obs-size-m    1
 
-  ;; Convert to patch coords
   set obs-left-x   (obs-left-x / meters-per-patch)
   set obs-right-x  (obs-right-x / meters-per-patch)
   set obs-lower-y  (obs-lower-y / meters-per-patch)
@@ -29,6 +28,13 @@ to layout-center-strip
       set r (obs-size / 2)
     ]
   ]
+end
+
+to-report doors-center-strip
+  ;; single door at top center as example
+  let x 0
+  let y (10 / meters-per-patch)
+  report (list (list x y vis-door1 0))
 end
 
 
@@ -143,6 +149,57 @@ to layout-cinema
   ]
 end
 
+to-report doors-cinema
+  ;; four doors: top left, top right, bottom left, bottom right
+  let upper-y (10 / meters-per-patch)
+  let lower-y (-8.5 / meters-per-patch)
+  let left-x (-13 / meters-per-patch)
+  let right-x (13 / meters-per-patch)
+
+  report (list
+    (list left-x  upper-y vis-door1 0)
+    (list right-x upper-y vis-door2 1)
+    (list left-x  lower-y vis-door3 2)
+    (list right-x lower-y vis-door4 3)
+  )
+end 
+
+to layout-f
+  ;; Define in meters
+  let obs-left-x   -4
+  let obs-lower-y  -10
+  let obs-upper-y   4
+  let obs-size-m     1
+
+  ;; Convert meters → patch coordinates
+  set obs-left-x   (obs-left-x / meters-per-patch)
+  set obs-lower-y  (obs-lower-y / meters-per-patch)
+  set obs-upper-y  (obs-upper-y / meters-per-patch)
+  let obs-size (obs-size-m / meters-per-patch)
+
+  ;; --- Vertical line  ---
+  foreach n-values (obs-upper-y - obs-lower-y + 1) [i -> obs-lower-y + i] [ y ->
+    create-seat obs-left-x y obs-size
+  ]
+
+  ;; --- Diagonal line (starts at the top of the vertical) ---
+  let start-x obs-left-x
+  let start-y obs-upper-y + 25
+
+  ;; Adjust the slope: 
+  let diag-length 130  ;; number of obstacles on the diagonal
+  let slope -0.85    ;; controls steepness (negative for down-right)
+
+  foreach n-values diag-length [i -> i] [ i ->
+    let px (start-x + i)
+    let py (start-y + (slope * i))
+    if (px <= max-pxcor and py >= min-pycor and py <= max-pycor) [
+      create-seat px py obs-size
+    ]
+  ]
+end
+
+
 to create-seat [x y seat-size]
   ask patch round x round y [
     sprout-obstacles 1 [
@@ -153,6 +210,87 @@ to create-seat [x y seat-size]
     ]
   ]
 end
+  
+to layout-none
+end
+
+;; -------- LAYOUT A --------
+to-report doors-layout-a
+  ;; single door in top wall center
+  let x 0
+  let y (12 / meters-per-patch)
+  report (list (list x y 50 0))
+end
+
+;; -------- LAYOUT B --------
+to-report doors-layout-b
+  ;; top wall center
+  let top-x 0
+  let top-y 12 / meters-per-patch
+
+  ;; bottom wall center
+  let bottom-x 0
+  let bottom-y -12 / meters-per-patch
+
+  ;; report both doors with visibility and exit ID (adjust as needed)
+  report (list 
+    (list top-x top-y 12 0)
+    (list bottom-x bottom-y 12 1)
+  )
+end
+
+;; -------- LAYOUT  C --------
+to-report doors-layout-c
+  ;; top wall center
+  let top-x 0
+  let top-y 12 / meters-per-patch
+
+  ;; bottom wall center
+  let bottom-x 0
+  let bottom-y -12 / meters-per-patch
+
+  ;; report both doors with visibility and exit ID (adjust as needed)
+  report (list 
+    (list top-x top-y 12 0)
+    (list bottom-x bottom-y 1 1)
+  )
+end
+;; -------- LAYOUT D --------
+to-report doors-layout-d
+  ;; two doors on left corners (top left and bottom left)
+  let left-x (-13 / meters-per-patch)
+  let top-y (12 / meters-per-patch)
+  let bottom-y (-12 / meters-per-patch)
+  report (list
+    (list left-x top-y 2 0)
+    (list left-x bottom-y 2 1)
+  )
+end 
+
+;; -------- LAYOUT E --------
+to-report doors-layout-e
+  ;; left-top corner
+  let left-x (-13 / meters-per-patch)
+  let top-y (12 / meters-per-patch)
+
+  ;; right-bottom corner
+  let right-x (13 / meters-per-patch)
+  let bottom-y (-12 / meters-per-patch)
+
+  report (list
+    (list left-x top-y 16.5 0)
+    (list right-x bottom-y 16.5 1)
+  )
+end
+
+;; -------- LAYOUT F --------
+to-report doors-layout-f
+  ;; single door in top wall center
+  let x 0
+  let y (12 / meters-per-patch)
+  report (list (list x y 50 0))
+end
+
 
 
 to spawn-cinema
@@ -239,8 +377,8 @@ to spawn-cinema
             set size mysize / meters-per-patch
             set r myr / meters-per-patch
             set weight 70
-            let dir unit (list (random-float 1 - 0.5) (random-float 1 - 0.5))
-            set velocity v-scale dir (0.2 * vmax)
+            ;let dir unit (list (random-float 1 - 0.5) (random-float 1 - 0.5))
+            set velocity (list (random-float 1 - 0.5) (random-float 1 - 0.5))
             set gamma random-float 0.1
 
             ;; behavioral parameters
@@ -266,9 +404,8 @@ to spawn-cinema
 end
 
 
-
-to spawn-center-strip
-  ;; ============================
+to spawn-none
+   ;; ============================
   ;; SPAWN AGENTS IN CENTER STRIP LAYOUT
   ;; ============================
 
