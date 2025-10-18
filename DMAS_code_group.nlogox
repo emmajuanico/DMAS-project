@@ -16,6 +16,7 @@ globals [
   spawn-spots       ;; ordered list of obstacle-free patches
   spot-index        ;; where we are in spawn-spots
   group-colors      ;; palette for groups
+  injured-people    ;; counter for people who are injured
 ]
 
 
@@ -49,6 +50,7 @@ people-own [
   separation-factor       ;;
   alignment-factor        ;;
   obstacle-factor         ;;
+  injured?                ;; true if this person is injured
 ]
 
 
@@ -62,6 +64,7 @@ to setup
   set vmax speed-max ; if we have slider we should dicide this is for having a whole simulation run on one option and not change with the slider 
   set people-exited 0
   set threshold-force 750
+  set injured-people 0
 
   ;; initialize patch variables so booleans are really booleans
   ask patches [
@@ -143,7 +146,7 @@ end
 ; ==========
 to go
   ;; randomize the order of updates each tick
-  ask n-of count people people [
+  ask n-of count people with [not injured?] people with [not injured?]  [
     
     let v-goal goal-component
     let v-new v-plus MOVE v-goal goal-factor
@@ -203,6 +206,102 @@ to go
       ]
     ]
     
+    ;; !!! Force dynamics
+    
+    ; Constants
+    let k 12000     ; normal repulsive force scaling
+    let Big_K 2000      ; tangential friction term scaling
+    let A 2000  ; (N) interaction strength
+    let B 0.08  ; (m) range of repulsive interactions
+    let F_threshold 1600 ; after this threshold, the agent becomes injured
+    
+    ; Get this agent’s own properties
+    let x_i list xcor ycor
+    let v_i velocity
+    let r_i r
+
+    ; Compute total force: F_i = Σ_b f_i_b + Σ_j≠i f_i_j
+    let F_i list 0 0
+
+    ; Forces from boundaries (obstacles + walls)
+    let F_boundary list 0 0
+
+    ask obstacles [
+      let x_b list xcor ycor
+      let d_ib v-distance x_i x_b
+      let n_ib normalize-vector (v-sub x_i x_b)
+      let t_ib list (- item 1 n_ib) (item 0 n_ib)
+      let overlap_ib (r_i - d_ib)
+      
+      let term1 v-scale n_ib (A * exp (overlap_ib / B))
+      let term2 v-scale n_ib (k * O overlap_ib)
+      let term3 v-scale t_ib (- Big_K * O overlap_ib * (dot-product v_i t_ib))
+      let f_i_b v-add (v-add term1 term2) term3
+      
+      set F_boundary v-add F_boundary f_i_b
+    ]
+
+    let world-left   (min-pxcor)
+    let world-right  (max-pxcor)
+    let world-bottom (min-pycor)
+    let world-top    (max-pycor)
+    
+    let xwalls (list (list world-left  ycor -1 0) (list world-right ycor 1 0))
+    let ywalls (list (list xcor world-bottom 0 -1) (list xcor world-top 0 1))
+    let allwalls sentence xwalls ywalls
+    
+    foreach allwalls [ wall ->
+      let wx item 0 wall
+      let wy item 1 wall
+      let nnx item 2 wall
+      let nny item 3 wall
+      let x_b list wx wy
+      let n_ib list nnx nny
+      let d_ib abs (dot-product (v-sub x_i x_b) n_ib)
+      let t_ib list (- nny) nnx
+      let overlap_ib (r_i - d_ib)
+      
+      let term1 v-scale n_ib (A * exp (overlap_ib / B))
+      let term2 v-scale n_ib (k * O overlap_ib)
+      let term3 v-scale t_ib (- Big_K * O overlap_ib * (dot-product v_i t_ib))
+      let f_i_b v-add (v-add term1 term2) term3
+      
+      set F_boundary v-add F_boundary f_i_b
+    ]
+    
+    set F_i v-add F_i F_boundary
+
+    ; forces from other agents
+    ask other people [
+      let x_j list xcor ycor
+      let v_j velocity
+      let r_j r
+      let d_ij v-distance x_i x_j
+      let n_ij normalize-vector (v-sub x_i x_j)
+      let t_ij list (- item 1 n_ij) (item 0 n_ij)
+      let r_sum (r_i + r_j)
+      let overlap_ij (r_sum - d_ij)
+      
+      ; f_i_j = A_i*exp[(r_i - d_ij)/B_i]*n_ij + k*O(r_i - d_ij)*n_ij + Big_K*O(r_i - d_ij)*((v_j - v_i) · t_ij)*t_ij
+      let term1 v-scale n_ij (A * exp (overlap_ij / B))
+      let term2 v-scale n_ij (k * O overlap_ij)
+      let term3 v-scale t_ij (Big_K * O overlap_ij * (dot-product (v-sub v_j v_i) t_ij))
+      let f_i_j v-add (v-add term1 term2) term3
+      
+      set F_i v-add F_i f_i_j
+    ]
+    
+    ; injury check based on total force magnitude
+    let F_magnitude v-mag F_i
+    
+    if (not injured?) and (F_magnitude > 1600) [
+      set injured? true
+      set velocity list 0 0
+      set color grey
+      set injured-people injured-people + 1
+    ]
+    
+    ;; !!! End of Force dynamics
 
     ;; Optional: draw velocity arrows
     if show-vectors? [
@@ -222,11 +321,12 @@ ask people with [ [is-exit?] of patch-here ] [
   die
 ]
 
-  ;; Stop if everyone is near some exit
-if count people with [
-  any? patches with [ is-exit? and distance myself < 2 ]
-] = count people [
-  ;; everyone evacuated
+  ;; Stop if everyone is near some exit besides the injured people
+let active-people (count people - injured-people)
+let evacuated-people people-exited
+
+if evacuated-people >= active-people [
+  ;; everyone evacuated besides the injured people
   set evacuation-time ticks * dt  ;; store final evacuation time
   stop                            ;; stop the simulation
 ]
@@ -259,6 +359,7 @@ end]]></code>
     <slider x="11" step="0.1" y="75" max="2" width="150" display="speed-max" height="50" min="0.1" direction="Horizontal" default="1.4" variable="speed-max"></slider>
     <switch x="11" y="486" height="50" on="false" variable="show-vectors?" width="148" display="show-vectors?"></switch>
     <slider x="11" step="0.05" y="544" max="1" width="150" display="panic-smooth" height="50" min="0" direction="Horizontal" default="0.4" variable="panic-smooth"></slider>
+    <monitor x="1000" precision="17" y="336" height="60" fontSize="11" width="100" display="injured-people">injured-people</monitor>
   </widgets>
   <info>## WHAT IS IT?
 

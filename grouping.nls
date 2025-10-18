@@ -117,6 +117,7 @@ to spawn-groups-observer [people-count group-size]
       set weight 70
       set velocity (list (random-float 1 - 0.5) (random-float 1 - 0.5))
       set gamma random-float 0.1
+      set injured? false
 
       ;; parameters derived from radius (your table)
       set ease-dist      10 * r
