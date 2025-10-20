@@ -34,7 +34,7 @@ to draw-door-visibility
 end
 
 
-to-report cohesion-component
+to-report group-cohesion-component
   ;for every agent in a spesific rediuos you want to go in a mean diraction of positioof the agents around you
   let ns other people with [group-id = [group-id] of myself] in-radius centroid_dist
   if any? ns [
@@ -45,7 +45,17 @@ to-report cohesion-component
   report list 0 0
 end
 
-to-report separation-component
+to-report neighbours-cohesion-component
+  let ns other people in-radius dc
+  if any? ns [
+    let cx mean [ xcor ] of ns
+    let cy mean [ ycor ] of ns
+    report unit (vector-to cx cy)
+  ]
+  report list 0 0
+end
+
+to-report group-separation-component
   let ns other people with [group-id = [group-id] of myself] in-radius avoid_dist
   if any? ns [
     let away list 0 0
@@ -60,9 +70,33 @@ to-report separation-component
   report list 0 0
 end
 
+to-report neighbours-separation-component
+  let ns other people in-radius da
+  if any? ns [
+    let away list 0 0
+    foreach sort ns [ neighbor ->
+      ask neighbor [
+        ;; vector from neighbor to me (i.e., away from neighbor)
+        set away v-add away (unit (vector-from [xcor] of myself [ycor] of myself xcor ycor))
+      ]
+    ]
+    report unit away
+  ]
+  report list 0 0
+end
 
-to-report alignment-component
+to-report groups-alignment-component
   let ns other people with [group-id = [group-id] of myself] in-radius alignment_dist
+  if any? ns [
+    let vx mean [ item 0 velocity ] of ns
+    let vy mean [ item 1 velocity ] of ns
+    report v-sub (list vx vy) velocity
+  ]
+  report list 0 0
+end
+
+to-report neighbours-alignment-component
+  let ns other people in-radius dl
   if any? ns [
     let vx mean [ item 0 velocity ] of ns
     let vy mean [ item 1 velocity ] of ns
@@ -114,7 +148,6 @@ to-report safe-spot? [nx ny myr]
   ]
 
   ;; 2) Overlap check (only nearby turtles to save time)
-  print(myr)
   let candidates other turtles in-radius (myr + 2)
   if any? candidates with [
     (distancexy nx ny) < (myr + r)  ;; r is each neighbor's radius
