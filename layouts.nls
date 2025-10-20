@@ -252,7 +252,7 @@ to-report doors-layout-c
   ;; report both doors with visibility and exit ID (adjust as needed)
   report (list 
     (list top-x top-y 12 0)
-    (list bottom-x bottom-y 1 1)
+    (list bottom-x bottom-y 3 1)
   )
 end
 ;; -------- LAYOUT D --------
@@ -262,8 +262,8 @@ to-report doors-layout-d
   let top-y (12 / meters-per-patch)
   let bottom-y (-12 / meters-per-patch)
   report (list
-    (list left-x top-y 2 0)
-    (list left-x bottom-y 2 1)
+    (list left-x top-y 3 0)
+    (list left-x bottom-y 3 1)
   )
 end 
 
@@ -299,8 +299,6 @@ to spawn-cinema
   ;; ============================
 
   ;; PARAMETERS
-  let mysize 0.8
-  let myr mysize / 2
   let spread 0.05 / meters-per-patch  ;; small jitter for visual variety
 
   ;; ensure group colors are initialized
@@ -365,37 +363,16 @@ to spawn-cinema
         ;; spawn each member in the corresponding seat
         foreach selected-seats [ ch ->
           let cx [pxcor] of ch
-          let cy [pycor] of ch + [r] of ch + myr / meters-per-patch
+          let cy [pycor] of ch + [r] of ch + 0.4 / meters-per-patch
 
           create-people 1 [
             ;; small jitter around chair
             let jitter-x (random-float spread - spread / 2)
             let jitter-y (random-float spread - spread / 2)
             setxy (cx + jitter-x) (cy + jitter-y)
+            let myr (0.25 + random-float 0.15) / meters-per-patch
 
-            ;; agent properties
-            set size mysize / meters-per-patch
-            set r myr / meters-per-patch
-            set weight 70
-            ;let dir unit (list (random-float 1 - 0.5) (random-float 1 - 0.5))
-            set velocity (list (random-float 1 - 0.5) (random-float 1 - 0.5))
-            set gamma random-float 0.1
-
-            ;; behavioral parameters
-            set ease-dist      10 * r
-            set avoid_dist     2 * r + 2
-            set centroid_dist  8 * r
-            set alignment_dist 4 * r
-
-            set goal-factor        6.5
-            set cohesion-factor    1.5
-            set separation-factor  2.5
-            set alignment-factor   1.5
-            set obstacle-factor    3.5
-
-            set group-id next-gid
-            set group-color gcol
-            set color group-color
+            initialize-agent-parameters group-size myr gcol
           ]
         ]
       ]
@@ -410,8 +387,6 @@ to spawn-none
   ;; ============================
 
   ;; PARAMETERS
-  let mysize 0.8
-  let myr mysize / 2
   let spread 3 / meters-per-patch  ;; radius around group center
   let margin 2
 
@@ -449,33 +424,39 @@ to spawn-none
 
         ;; create all members at once
         create-people group-size [
-          let pos find-safe-spot-around cx cy spread (myr / meters-per-patch)
+          let myr (0.25 + random-float 0.15) / meters-per-patch
+          let pos find-safe-spot-around cx cy spread (myr)
           setxy item 0 pos item 1 pos
           
-          ;; agent properties
-          set size mysize / meters-per-patch
-          set r myr / meters-per-patch
-          set weight 70
-          set velocity (list (random-float 1 - 0.5) (random-float 1 - 0.5))
-          set gamma random-float 0.1
-
-          ;; behavioral parameters
-          set ease-dist      10 * r
-          set avoid_dist     2 * r + 2
-          set centroid_dist  8 * r
-          set alignment_dist 4 * r
-
-          set goal-factor        6.5
-          set cohesion-factor    1.5
-          set separation-factor  2.5
-          set alignment-factor   1.5
-          set obstacle-factor    3.5
-
-          set group-id next-gid
-          set group-color gcol
-          set color group-color
+          initialize-agent-parameters group-size myr gcol
         ]
       ]
     ]
   ]
+end
+
+to initialize-agent-parameters [group-size myr gcol]
+  ;; agent properties
+  set size myr * 2
+  set r myr
+  set weight 70                                                              ;; TODO random number
+                                                                             ;let dir unit (list (random-float 1 - 0.5) (random-float 1 - 0.5))
+  set velocity (list (random-float 1 - 0.5) (random-float 1 - 0.5))
+  set gamma random-float 0.1
+  
+  ;; behavioral parameters
+  set ease-dist      10 * r
+  set avoid_dist     2 * r + 2
+  set centroid_dist  8 * r
+  set alignment_dist 4 * r
+  
+  set goal-factor        6.5
+  set cohesion-factor    1.5
+  set separation-factor  2.5
+  set alignment-factor   1.5
+  set obstacle-factor    3.5
+  
+  set group-id next-gid
+  set group-color gcol
+  set color group-color
 end
