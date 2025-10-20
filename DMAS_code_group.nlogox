@@ -2,7 +2,9 @@
 <model version="NetLogo 7.0.0" snapToGrid="false">
   <code><![CDATA[__includes [ "helpers.nls" "functions_gruops.nls" "grouping.nls" "layouts.nls"]
 
-globals [ 
+globals [
+  panic-smooth
+  speed-max
   vmax ;vmax is just max velocity
   evacuation-time
   threshold-force 
@@ -40,6 +42,7 @@ people-own [
   velocity                ;; a vector with the step of agent
   gamma                   ;; panic factor
   group-id                ;; ID of the group this person belongs to
+  group-size              ;; size of it's group needed for ploting
   group-color             ;; color assigned to the group
   ease-dist               ;; distance to the exit in which the panic is not increasing
   avoid_dist              ;;
@@ -59,10 +62,12 @@ to setup
   set time-step 0.1
   resize-world -130 130 -120 120
   set-patch-size 2
+  set speed-max 2.4 ;;;;;;;;;;;;;;;;;;;; this sould be cheked with literature ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  set panic-smooth 0.9 ;;;;;;;;;;;;;;;;; this sould be cheked with literature ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   set vmax (speed-max / meters-per-patch)
   set people-exited 0
   set threshold-force 750
-
+  
   ask patches [
     set is-exit? false
     set exit-id -1
@@ -220,15 +225,6 @@ to go
       ]
     ]
 
-    if show-vectors? [
-      let endx (xcor + (item 0 velocity) * 2)
-      let endy (ycor + (item 1 velocity) * 2)
-      set color group-color
-      pen-down set pen-size 1
-      setxy endx endy
-      pen-up
-      setxy (item 0 pnext) (item 1 pnext)
-    ]
   ]
 
   ask people with [ any? patches with [ is-exit? ] in-radius r ] [
@@ -247,23 +243,36 @@ end
 ]]></code>
   <widgets>
     <view x="382" wrappingAllowedX="false" y="23" frameRate="30.0" minPycor="-120" height="497" showTickCounter="true" patchSize="2.0" fontSize="10" wrappingAllowedY="false" width="537" tickCounterLabel="ticks" maxPycor="120" updateMode="0" maxPxcor="130" minPxcor="-130"></view>
-    <button x="111" y="601" height="40" disableUntilTicks="false" forever="true" kind="Observer" width="92">go</button>
-    <button x="11" y="601" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="92">Setup</button>
-    <monitor x="227" precision="0" y="350" height="60" fontSize="11" width="100" display="Groups of 4">In_groups_of_4 / 4</monitor>
-    <monitor x="227" precision="0" y="282" height="60" fontSize="11" width="100" display="Groups of 3">In_groups_of_3 / 3</monitor>
-    <monitor x="227" precision="0" y="214" height="60" fontSize="11" width="100" display="Groups of 2">In_groups_of_2 / 2</monitor>
-    <slider x="11" step="3" y="282" max="100" width="208" display="In_groups_of_3" height="60" min="0" direction="Horizontal" default="18.0" variable="In_groups_of_3" units="people"></slider>
-    <slider x="11" step="4" y="350" max="100" width="208" display="In_groups_of_4" height="60" min="0" direction="Horizontal" default="16.0" variable="In_groups_of_4" units="people"></slider>
-    <slider x="11" step="2" y="214" max="100" width="208" display="In_groups_of_2" height="60" min="0" direction="Horizontal" default="10.0" variable="In_groups_of_2" units="people"></slider>
-    <monitor x="227" precision="17" y="415" height="60" fontSize="11" width="100" display="Groups of 5">In_groups_of_5 / 5</monitor>
-    <slider x="11" step="5" y="415" max="100" width="208" display="In_groups_of_5" height="60" min="0" direction="Horizontal" default="20.0" variable="In_groups_of_5" units="people"></slider>
-    <monitor x="227" precision="0" y="146" height="60" fontSize="11" width="100" display="Groups of 1">In_groups_of_1 / 1</monitor>
-    <slider x="11" step="1" y="146" max="100" width="208" display="In_groups_of_1" height="60" min="0" direction="Horizontal" default="20.0" variable="In_groups_of_1" units="people"></slider>
-    <monitor x="171" precision="0" y="16" height="81" fontSize="30" width="162" display="Total number of people">In_groups_of_1 + In_groups_of_2 + In_groups_of_3 + In_groups_of_4 + In_groups_of_5</monitor>
-    <slider x="11" step="0.1" y="75" max="2.5" width="150" display="speed-max" height="50" min="0.1" direction="Horizontal" default="2.4" variable="speed-max" units="m/s"></slider>
-    <switch x="11" y="486" height="50" on="false" variable="show-vectors?" width="148" display="show-vectors?"></switch>
-    <slider x="11" step="0.05" y="544" max="1" width="150" display="panic-smooth" height="50" min="0" direction="Horizontal" default="1.0" variable="panic-smooth"></slider>
-    <chooser x="1188" y="53" height="60" variable="layout-choice" current="3" width="250" display="layout-choice">
+    <monitor x="955" precision="1" y="22" height="60" fontSize="11" width="100">people-exited</monitor>
+    <plot x="953" autoPlotX="true" yMax="10.0" autoPlotY="true" yAxis="Pepole" y="93" xMin="0.0" height="408" legend="true" xMax="10.0" yMin="0.0" width="439" xAxis="time" display="Pepole who exited">
+      <setup></setup>
+      <update></update>
+      <pen interval="1.0" mode="0" display="default" color="-16777216" legend="true">
+        <setup></setup>
+        <update>plot N - count people</update>
+      </pen>
+      <pen interval="1.0" mode="0" display="pen-1" color="-2139308" legend="true">
+        <setup></setup>
+        <update>plot In_groups_of_1 - count people with [group-id = 1]</update>
+      </pen>
+      <pen interval="1.0" mode="0" display="pen-2" color="-8990512" legend="true">
+        <setup></setup>
+        <update>plot In_groups_of_2 - count people with [group-id = 2]</update>
+      </pen>
+      <pen interval="1.0" mode="0" display="pen-3" color="-14439633" legend="true">
+        <setup></setup>
+        <update>plot In_groups_of_3 - count people with [group-id = 3]</update>
+      </pen>
+      <pen interval="1.0" mode="0" display="pen-4" color="-6917194" legend="true">
+        <setup></setup>
+        <update>plot In_groups_of_4 - count people with [group-id = 4]</update>
+      </pen>
+      <pen interval="1.0" mode="0" display="pen-5" color="-2064490" legend="true">
+        <setup></setup>
+        <update>plot In_groups_of_5 - count people  with [group-id = 5]</update>
+      </pen>
+    </plot>
+    <chooser x="12" y="8" height="60" variable="layout-choice" current="4" width="162" display="layout-choice">
       <choice type="string" value="center-strip"></choice>
       <choice type="string" value="cinema"></choice>
       <choice type="string" value="none"></choice>
@@ -274,31 +283,19 @@ end
       <choice type="string" value="layout-e"></choice>
       <choice type="string" value="layout-f"></choice>
     </chooser>
-    <monitor x="973" precision="1" y="51" height="60" fontSize="11" width="100">people-exited</monitor>
-    <plot x="980" autoPlotX="true" yMax="10.0" autoPlotY="true" yAxis="Pepole" y="134" xMin="0.0" height="175" legend="true" xMax="10.0" yMin="0.0" width="230" xAxis="time" display="Pepole who exited">
-      <setup></setup>
-      <update></update>
-      <pen interval="1.0" mode="0" display="default" color="-16777216" legend="true">
-        <setup></setup>
-        <update>plot In_groups_of_1 + In_groups_of_2 + In_groups_of_3 + In_groups_of_4 + In_groups_of_5 - count people</update>
-      </pen>
-      <pen interval="1.0" mode="0" display="pen-1" color="-7500403" legend="true">
-        <setup></setup>
-        <update>plot In_groups_of_1</update>
-      </pen>
-      <pen interval="1.0" mode="0" display="pen-2" color="-2674135" legend="true">
-        <setup></setup>
-        <update>plot In_groups_of_2</update>
-      </pen>
-      <pen interval="1.0" mode="0" display="pen-3" color="-955883" legend="true">
-        <setup></setup>
-        <update>plot In_groups_of_3</update>
-      </pen>
-      <pen interval="1.0" mode="0" display="pen-4" color="-6459832" legend="true">
-        <setup></setup>
-        <update></update>
-      </pen>
-    </plot>
+    <monitor x="185" precision="0" y="9" height="79" fontSize="30" width="162" display="Total number of people">In_groups_of_1 + In_groups_of_2 + In_groups_of_3 + In_groups_of_4 + In_groups_of_5</monitor>
+    <slider x="16" step="1" y="95" max="100" width="208" display="In_groups_of_1" height="60" min="0" direction="Horizontal" default="20.0" variable="In_groups_of_1" units="people"></slider>
+    <monitor x="232" precision="0" y="299" height="60" fontSize="11" width="100" display="Groups of 4">In_groups_of_4 / 4</monitor>
+    <monitor x="232" precision="0" y="231" height="60" fontSize="11" width="100" display="Groups of 3">In_groups_of_3 / 3</monitor>
+    <monitor x="232" precision="0" y="163" height="60" fontSize="11" width="100" display="Groups of 2">In_groups_of_2 / 2</monitor>
+    <slider x="16" step="3" y="231" max="100" width="208" display="In_groups_of_3" height="60" min="0" direction="Horizontal" default="18.0" variable="In_groups_of_3" units="people"></slider>
+    <slider x="16" step="4" y="299" max="100" width="208" display="In_groups_of_4" height="60" min="0" direction="Horizontal" default="16.0" variable="In_groups_of_4" units="people"></slider>
+    <slider x="16" step="2" y="163" max="100" width="208" display="In_groups_of_2" height="60" min="0" direction="Horizontal" default="10.0" variable="In_groups_of_2" units="people"></slider>
+    <slider x="16" step="5" y="364" max="100" width="208" display="In_groups_of_5" height="60" min="0" direction="Horizontal" default="20.0" variable="In_groups_of_5" units="people"></slider>
+    <monitor x="232" precision="0" y="95" height="60" fontSize="11" width="100" display="Groups of 1">In_groups_of_1 / 1</monitor>
+    <button x="16" y="486" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="92">Setup</button>
+    <button x="116" y="486" height="40" disableUntilTicks="false" forever="true" kind="Observer" width="92">go</button>
+    <monitor x="232" precision="17" y="364" height="60" fontSize="11" width="100" display="Groups of 5">In_groups_of_5 / 5</monitor>
   </widgets>
   <info>## WHAT IS IT?
 
