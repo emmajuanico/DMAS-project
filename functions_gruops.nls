@@ -114,6 +114,7 @@ to-report safe-spot? [nx ny myr]
   ]
 
   ;; 2) Overlap check (only nearby turtles to save time)
+  print(myr)
   let candidates other turtles in-radius (myr + 2)
   if any? candidates with [
     (distancexy nx ny) < (myr + r)  ;; r is each neighbor's radius
