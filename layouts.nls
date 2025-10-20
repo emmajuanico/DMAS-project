@@ -459,4 +459,5 @@ to initialize-agent-parameters [group-size myr gcol]
   set group-id next-gid
   set group-color gcol
   set color group-color
+  set gsize group-size
 end

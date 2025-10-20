@@ -42,7 +42,7 @@ people-own [
   velocity                ;; a vector with the step of agent
   gamma                   ;; panic factor
   group-id                ;; ID of the group this person belongs to
-  group-size              ;; size of it's group needed for ploting
+  gsize              ;; size of it's group needed for ploting
   group-color             ;; color assigned to the group
   ease-dist               ;; distance to the exit in which the panic is not increasing
   avoid_dist              ;;
@@ -243,7 +243,6 @@ end
 ]]></code>
   <widgets>
     <view x="382" wrappingAllowedX="false" y="23" frameRate="30.0" minPycor="-120" height="497" showTickCounter="true" patchSize="2.0" fontSize="10" wrappingAllowedY="false" width="537" tickCounterLabel="ticks" maxPycor="120" updateMode="0" maxPxcor="130" minPxcor="-130"></view>
- 
     <monitor x="955" precision="1" y="22" height="60" fontSize="11" width="100">people-exited</monitor>
     <plot x="953" autoPlotX="true" yMax="10.0" autoPlotY="true" yAxis="Pepole" y="93" xMin="0.0" height="408" legend="true" xMax="10.0" yMin="0.0" width="439" xAxis="time" display="Pepole who exited">
       <setup></setup>
@@ -274,7 +273,6 @@ end
       </pen>
     </plot>
     <chooser x="12" y="8" height="60" variable="layout-choice" current="4" width="162" display="layout-choice">
-
       <choice type="string" value="center-strip"></choice>
       <choice type="string" value="cinema"></choice>
       <choice type="string" value="none"></choice>
