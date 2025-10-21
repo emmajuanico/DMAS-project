@@ -45,9 +45,12 @@ people-own [
   gsize              ;; size of it's group needed for ploting
   group-color             ;; color assigned to the group
   ease-dist               ;; distance to the exit in which the panic is not increasing
-  avoid_dist              ;;
-  centroid_dist           ;;
-  alignment_dist          ;;
+  avoid_dist              ;;group
+  da                      ;; neighbours
+  centroid_dist           ;; group
+  dc                      ;; neighbours
+  alignment_dist          ;; group
+  dl                      ;;neighbours
   goal-factor             ;;
   cohesion-factor         ;;
   separation-factor       ;;
@@ -121,7 +124,9 @@ to setup-doors [layout-name]
   if layout-name = "layout-f" [ set doors-list doors-layout-f ]
   
   let door-width 2
+  let door-depth 1
   let half-width floor ((door-width / meters-per-patch) / 2)
+  let half-depth floor ((door-depth / meters-per-patch) / 2)
 
   foreach doors-list [ exit-data ->
     let x round (item 0 exit-data)
@@ -133,6 +138,7 @@ to setup-doors [layout-name]
     let horizontal? false
     if (y = max-pycor or y = min-pycor) [ set horizontal? true ]
 
+    ;; Center patch
     if patch x y != nobody [
       ask patch x y [
         set is-exit? true
@@ -144,38 +150,42 @@ to setup-doors [layout-name]
     ]
 
     ifelse horizontal? [
-      ;; horizontal door strip along x-axis
+      ;; horizontal door along x-axis, expand perpendicular in y
       foreach (range (x - half-width) (x + half-width + 1)) [ xx ->
         let xx-round round xx
-        if xx-round != x and patch xx-round y != nobody [
-          ask patch xx-round y [
-            set is-exit? true
-            set is-main-exit? false
-            set exit-id id
-            set visibility (vis / meters-per-patch)
-            set pcolor green
+        foreach (range (y - half-depth) (y + half-depth + 1)) [ yy ->
+          let yy-round round yy
+          if patch xx-round yy-round != nobody [
+            ask patch xx-round yy-round [
+              set is-exit? true
+              if xx-round != x or yy-round != y [ set is-main-exit? false ]
+              set exit-id id
+              set visibility (vis / meters-per-patch)
+              set pcolor green
+            ]
           ]
         ]
       ]
     ] [
-      ;; vertical door strip along y-axis
+      ;; vertical door along y-axis, expand perpendicular in x
       foreach (range (y - half-width) (y + half-width + 1)) [ yy ->
         let yy-round round yy
-        if yy-round != y and patch x yy-round != nobody [
-          ask patch x yy-round [
-            set is-exit? true
-            set is-main-exit? false
-            set exit-id id
-            set visibility (vis / meters-per-patch)
-            set pcolor green
+        foreach (range (x - half-depth) (x + half-depth + 1)) [ xx ->
+          let xx-round round xx
+          if patch xx-round yy-round != nobody [
+            ask patch xx-round yy-round [
+              set is-exit? true
+              if xx-round != x or yy-round != y [ set is-main-exit? false ]
+              set exit-id id
+              set visibility (vis / meters-per-patch)
+              set pcolor green
+            ]
           ]
         ]
       ]
     ]
   ]
 end
-
-
 
 
 ;; ========== MAIN LOOP ==========
@@ -227,9 +237,15 @@ to go
 
   ]
 
-  ask people with [ any? patches with [ is-exit? ] in-radius r ] [
+  ask people with [ any? patches with [ is-exit? ] in-radius (r * 1.5) ] [
     set people-exited people-exited + 1
     die
+  ]
+  
+  ;; stop if reached maximum simulation time
+  if ticks >= 5000 [ ;; decide how many ticks we want
+    set evacuation-time ticks * time-step
+    stop
   ]
 
   if count people with [ any? patches with [ is-exit? and distance myself < (2 / meters-per-patch) ] ] = count people [
@@ -272,7 +288,7 @@ end
         <update>plot In_groups_of_5 - count people  with [group-id = 5]</update>
       </pen>
     </plot>
-    <chooser x="12" y="8" height="60" variable="layout-choice" current="4" width="162" display="layout-choice">
+    <chooser x="12" y="8" height="60" variable="layout-choice" current="5" width="162" display="layout-choice">
       <choice type="string" value="center-strip"></choice>
       <choice type="string" value="cinema"></choice>
       <choice type="string" value="none"></choice>
@@ -284,14 +300,14 @@ end
       <choice type="string" value="layout-f"></choice>
     </chooser>
     <monitor x="185" precision="0" y="9" height="79" fontSize="30" width="162" display="Total number of people">In_groups_of_1 + In_groups_of_2 + In_groups_of_3 + In_groups_of_4 + In_groups_of_5</monitor>
-    <slider x="16" step="1" y="95" max="100" width="208" display="In_groups_of_1" height="60" min="0" direction="Horizontal" default="20.0" variable="In_groups_of_1" units="people"></slider>
+    <slider x="16" step="1" y="95" max="100" width="208" display="In_groups_of_1" height="60" min="0" direction="Horizontal" default="0.0" variable="In_groups_of_1" units="people"></slider>
     <monitor x="232" precision="0" y="299" height="60" fontSize="11" width="100" display="Groups of 4">In_groups_of_4 / 4</monitor>
     <monitor x="232" precision="0" y="231" height="60" fontSize="11" width="100" display="Groups of 3">In_groups_of_3 / 3</monitor>
     <monitor x="232" precision="0" y="163" height="60" fontSize="11" width="100" display="Groups of 2">In_groups_of_2 / 2</monitor>
-    <slider x="16" step="3" y="231" max="100" width="208" display="In_groups_of_3" height="60" min="0" direction="Horizontal" default="18.0" variable="In_groups_of_3" units="people"></slider>
-    <slider x="16" step="4" y="299" max="100" width="208" display="In_groups_of_4" height="60" min="0" direction="Horizontal" default="16.0" variable="In_groups_of_4" units="people"></slider>
-    <slider x="16" step="2" y="163" max="100" width="208" display="In_groups_of_2" height="60" min="0" direction="Horizontal" default="10.0" variable="In_groups_of_2" units="people"></slider>
-    <slider x="16" step="5" y="364" max="100" width="208" display="In_groups_of_5" height="60" min="0" direction="Horizontal" default="20.0" variable="In_groups_of_5" units="people"></slider>
+    <slider x="16" step="3" y="231" max="100" width="208" display="In_groups_of_3" height="60" min="0" direction="Horizontal" default="90.0" variable="In_groups_of_3" units="people"></slider>
+    <slider x="16" step="4" y="299" max="100" width="208" display="In_groups_of_4" height="60" min="0" direction="Horizontal" default="92.0" variable="In_groups_of_4" units="people"></slider>
+    <slider x="16" step="2" y="163" max="100" width="208" display="In_groups_of_2" height="60" min="0" direction="Horizontal" default="84.0" variable="In_groups_of_2" units="people"></slider>
+    <slider x="16" step="5" y="364" max="100" width="208" display="In_groups_of_5" height="60" min="0" direction="Horizontal" default="85.0" variable="In_groups_of_5" units="people"></slider>
     <monitor x="232" precision="0" y="95" height="60" fontSize="11" width="100" display="Groups of 1">In_groups_of_1 / 1</monitor>
     <button x="16" y="486" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="92">Setup</button>
     <button x="116" y="486" height="40" disableUntilTicks="false" forever="true" kind="Observer" width="92">go</button>
