@@ -55,14 +55,19 @@ to-report neighbours-cohesion-component
 end
 
 to-report group-separation-component
-  let ns other people with [group-id = [group-id] of myself] in-radius avoid_dist
+  let ns other people with [ group-id = [group-id] of myself ] in-radius avoid_dist
   if any? ns [
-    let away list 0 0
+    let away (list 0 0)
+    ;; For each neighbor add unit vector from neighbor -> me
     foreach sort ns [ neighbor ->
-      ask neighbor [
-        ;; vector from neighbor to me (i.e., away from neighbor)
-        set away v-add away (unit (vector-from [xcor] of myself [ycor] of myself xcor ycor))
+      let ddx (xcor - [xcor] of neighbor)
+      let ddy (ycor - [ycor] of neighbor)
+      ;; If neighbor is exactly on same spot, create a small random vector
+      if (ddx = 0 and ddy = 0) [
+        set ddx (random-float 1 - 0.5)
+        set ddy (random-float 1 - 0.5)
       ]
+      set away v-add away (unit (list ddx ddy))
     ]
     report unit away
   ]
@@ -70,19 +75,23 @@ to-report group-separation-component
 end
 
 to-report neighbours-separation-component
-  let ns other people with [group-id != [group-id] of myself] in-radius da
+  let ns other people with [ group-id != [group-id] of myself ] in-radius da
   if any? ns [
-    let away list 0 0
+    let away (list 0 0)
     foreach sort ns [ neighbor ->
-      ask neighbor [
-        ;; vector from neighbor to me (i.e., away from neighbor)
-        set away v-add away (unit (vector-from [xcor] of myself [ycor] of myself xcor ycor))
+      let ddx (xcor - [xcor] of neighbor)
+      let ddy (ycor - [ycor] of neighbor)
+      if (ddx = 0 and ddy = 0) [
+        set ddx (random-float 1 - 0.5)
+        set ddy (random-float 1 - 0.5)
       ]
+      set away v-add away (unit (list ddx ddy))
     ]
     report unit away
   ]
   report list 0 0
 end
+
 
 to-report groups-alignment-component
   let ns other people with [group-id = [group-id] of myself] in-radius alignment_dist
@@ -158,23 +167,27 @@ end
 ;; True if a circle of radius `myr` at (nx, ny) is inside the world
 ;; and does not overlap any other turtle’s circle.
 to-report safe-spot? [nx ny myr]
-  ;; 1) Inside boundaries?
+  ;; 1) inside boundaries?
   if not (nx > min-pxcor and nx < max-pxcor and ny > min-pycor and ny < max-pycor) [
     report false
   ]
 
-  ;; 2) Overlap check (only nearby turtles to save time)
-  ;;print(myr)
-  let candidates other turtles in-radius (myr + 2)
-  if any? candidates with [
-    (distancexy nx ny) < (myr + r)  ;; r is each neighbor's radius
-  ] [
-    report false
+  ;; 2) overlap with other people/turtles?
+  ;; consider only nearby turtles for speed
+  let nearby-turtles other turtles in-radius (myr + 4) ;; loose radius for candidate search
+  if any? nearby-turtles [
+    ;; check pairwise with their radius attribute
+    if any? nearby-turtles with [
+      (distancexy nx ny) < (myr + r)
+    ] [
+      report false
+    ]
   ]
 
-  ;; Passed all checks
+  ;; passed all checks
   report true
 end
+
 
 
 ; ==========
