@@ -301,10 +301,8 @@ to spawn-cinema
   ;; PARAMETERS
   let spread 0.05 / meters-per-patch  ;; small jitter for visual variety
 
-  ;; ensure group colors are initialized
-  if not (is-list? group-colors) or length group-colors = 0 [
-    set group-colors [ red blue green orange pink cyan violet brown ]
-  ]
+  ;; group colors are initialized
+  let size-colors [ orange blue green yellow red ]
 
   ;; Collect all chair turtles (obstacles)
   let chairs-list sort turtles with [breed = obstacles]
@@ -358,7 +356,8 @@ to spawn-cinema
 
         ;; new group id/color
         set next-gid next-gid + 1
-        let gcol item ((next-gid - 1) mod (length group-colors)) group-colors
+        let base-color item (group-size - 1) size-colors
+        let gcol base-color + (random-float 7 - 3) 
 
         ;; spawn each member in the corresponding seat
         foreach selected-seats [ ch ->
@@ -382,18 +381,12 @@ end
 
 
 to spawn-none
-   ;; ============================
-  ;; SPAWN AGENTS IN CENTER STRIP LAYOUT
-  ;; ============================
-
   ;; PARAMETERS
-  let spread 3 / meters-per-patch  ;; radius around group center
+  let spread 1.5 / meters-per-patch  ;; radius around group center
   let margin 2
 
   ;; ensure group colors are initialized
-  if not (is-list? group-colors) or length group-colors = 0 [
-    set group-colors [ red blue green orange pink cyan violet brown ]
-  ]
+  let size-colors [ orange blue green yellow red ]
 
   ;; Define group types as [total-members group-size]
   let all-groups (list
@@ -420,7 +413,9 @@ to spawn-none
 
         ;; new group id/color
         set next-gid next-gid + 1
-        let gcol item ((next-gid - 1) mod (length group-colors)) group-colors
+        let base-color item (group-size - 1) size-colors
+        ;; add slight variation for this group only
+        let gcol base-color + (random-float 7 - 3) 
 
         ;; create all members at once
         create-people group-size [
@@ -446,9 +441,12 @@ to initialize-agent-parameters [group-size myr gcol]
   
   ;; behavioral parameters
   set ease-dist      10 * r
-  set avoid_dist     2 * r + 2
-  set centroid_dist  8 * r
-  set alignment_dist 4 * r
+  set avoid_dist     2 * r + 2 ;;group
+  set da             10 * r + 2 ;;neigh
+  set centroid_dist  8 * r ;;group
+  set dc             10 * r ;;neigh
+  set alignment_dist 4 * r ;;group
+  set dl             10 * r ;;neigh
   
   set goal-factor        6.5
   set cohesion-factor    1.5

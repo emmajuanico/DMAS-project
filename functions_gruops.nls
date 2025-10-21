@@ -33,8 +33,7 @@ to draw-door-visibility
   ]
 end
 
-
-to-report cohesion-component
+to-report group-cohesion-component
   ;for every agent in a spesific rediuos you want to go in a mean diraction of positioof the agents around you
   let ns other people with [group-id = [group-id] of myself] in-radius centroid_dist
   if any? ns [
@@ -45,7 +44,17 @@ to-report cohesion-component
   report list 0 0
 end
 
-to-report separation-component
+to-report neighbours-cohesion-component
+  let ns other people with [group-id != [group-id] of myself] in-radius dc
+  if any? ns [
+    let cx mean [ xcor ] of ns
+    let cy mean [ ycor ] of ns
+    report unit (vector-to cx cy)
+  ]
+  report list 0 0
+end
+
+to-report group-separation-component
   let ns other people with [group-id = [group-id] of myself] in-radius avoid_dist
   if any? ns [
     let away list 0 0
@@ -60,9 +69,33 @@ to-report separation-component
   report list 0 0
 end
 
+to-report neighbours-separation-component
+  let ns other people with [group-id != [group-id] of myself] in-radius da
+  if any? ns [
+    let away list 0 0
+    foreach sort ns [ neighbor ->
+      ask neighbor [
+        ;; vector from neighbor to me (i.e., away from neighbor)
+        set away v-add away (unit (vector-from [xcor] of myself [ycor] of myself xcor ycor))
+      ]
+    ]
+    report unit away
+  ]
+  report list 0 0
+end
 
-to-report alignment-component
+to-report groups-alignment-component
   let ns other people with [group-id = [group-id] of myself] in-radius alignment_dist
+  if any? ns [
+    let vx mean [ item 0 velocity ] of ns
+    let vy mean [ item 1 velocity ] of ns
+    report v-sub (list vx vy) velocity
+  ]
+  report list 0 0
+end
+
+to-report neighbours-alignment-component
+  let ns other people with [group-id != [group-id] of myself] in-radius dl
   if any? ns [
     let vx mean [ item 0 velocity ] of ns
     let vy mean [ item 1 velocity ] of ns
@@ -87,16 +120,33 @@ end
 
 to-report MOVE
   ;;;;;;;;;;;;;;; let v-goal goal-component
-  let v-coh  cohesion-component
-  let v-sep  separation-component
-  let v-ali  alignment-component    
+  ;;cohesion
+  let v-coh-g group-cohesion-component
+  let v-coh-n neighbours-cohesion-component
+
+  ;separation
+  let v-sep-g group-separation-component
+  let v-sep-n neighbours-separation-component
+  
+  ;alignment
+  let v-ali-g groups-alignment-component
+  let v-ali-n neighbours-alignment-component 
+  
   let v-obs  obstacle-component
+  
+  ;;numeric weights
+  let group-weight      1.0
+  let neighbour-weight  0.4
 
   ;; weighted sum of components
   ;;;;;;;;;;;;;;;; let v-new v-plus (list 0 0) v-goal mg
-  let v-new v-plus (list 0 0) v-coh cohesion-factor
-  set v-new v-plus v-new v-sep separation-factor
-  set v-new v-plus v-new v-ali alignment-factor
+  let v-new (list 0 0)
+  set v-new v-plus v-new v-coh-g (cohesion-factor * group-weight)
+  set v-new v-plus v-new v-coh-n (cohesion-factor * neighbour-weight)
+  set v-new v-plus v-new v-sep-g (separation-factor * group-weight)
+  set v-new v-plus v-new v-sep-n (separation-factor * neighbour-weight)
+  set v-new v-plus v-new v-ali-g (alignment-factor * group-weight)
+  set v-new v-plus v-new v-ali-n (alignment-factor * neighbour-weight)
   set v-new v-plus v-new v-obs obstacle-factor
   
   report v-new
@@ -114,7 +164,7 @@ to-report safe-spot? [nx ny myr]
   ]
 
   ;; 2) Overlap check (only nearby turtles to save time)
-  print(myr)
+  ;;print(myr)
   let candidates other turtles in-radius (myr + 2)
   if any? candidates with [
     (distancexy nx ny) < (myr + r)  ;; r is each neighbor's radius
@@ -151,29 +201,51 @@ to update-panic
   let L max (list world-width world-height)
   let delta1 max list 0 ((D - ease-dist) / L)
 
-  ;; δ2: mismatch with neighbors
+  ;; δ2: mismatch with group
   let ns other people with [group-id = [group-id] of myself] in-radius alignment_dist
-  let delta2 0
+  let delta2-group 0
   if any? ns [
     let vmean list (mean [ item 0 velocity ] of ns) (mean [ item 1 velocity ] of ns)
     let mis v-mag (v-sub vmean velocity)
-    set delta2 mis / vmax
+    set delta2-group mis / vmax
   ]
+  
+  ;; δ2: mismatch with neighbours
+  let ns2 other people with [group-id != [group-id] of myself] in-radius alignment_dist
+  let delta2-neigh 0
+  if any? ns [
+    let vmean list (mean [ item 0 velocity ] of ns) (mean [ item 1 velocity ] of ns)
+    let mis v-mag (v-sub vmean velocity)
+    set delta2-neigh mis / vmax
+  ]
+  
 
-  ;; δ3: neighbors in discomfort (proxy: very slow agents)
+  ;; δ3: group in discomfort (proxy: very slow agents)
   let nsC other people with [group-id = [group-id] of myself] in-radius centroid_dist
-  let delta3 0
+  let delta3-group 0
   if any? nsC [
-    set delta3 (count nsC with [ v-mag velocity < 0.2 * vmax ]) / (count nsC)
+    set delta3-group (count nsC with [ v-mag velocity < 0.2 * vmax ]) / (count nsC)
+  ]
+  
+  ;; δ3: neighbors in discomfort (proxy: very slow agents)
+  let nsC2 other people with [group-id = [group-id] of myself] in-radius centroid_dist
+  let delta3-neigh 0
+  if any? nsC [
+    set delta3-neigh (count nsC with [ v-mag velocity < 0.2 * vmax ]) / (count nsC)
   ]
 
-  ;; δ4: lagging compared to local min speed
+  ;; δ4: lagging compared to local min speed - group
   let vmin vmax
   if any? ns [ set vmin min (list vmin [ v-mag velocity ] of ns) ]
-  let delta4 max list 0 ((vmin - v-mag velocity) / vmax)
+  let delta4-group max list 0 ((vmin - v-mag velocity) / vmax)
+  
+  ;; δ4: lagging compared to local min speed - neighbours
+  let vmin2 vmax
+  if any? ns [ set vmin min (list vmin [ v-mag velocity ] of ns) ]
+  let delta4-neigh max list 0 ((vmin - v-mag velocity) / vmax)
 
   ;; Combine
-  let zeta ((delta1 + delta2 + delta3 + delta4) / 4)
+  let zeta ((delta1 + 0.66 * (delta2-group + delta3-group + delta4-group) + 0.33 * (delta2-neigh + delta3-neigh + delta4-neigh)) / 4)
   set gamma ((1 - panic-smooth) * gamma + panic-smooth * zeta)
   set gamma max list 0 (min list 1 gamma)
 end
