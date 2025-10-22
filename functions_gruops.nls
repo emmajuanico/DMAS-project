@@ -2,44 +2,19 @@
 ; BEHAVIOR COMPONENTS
 ; ==========
 
+;; ========== GOAL ==========
 to-report goal-component
-  ;; check patches marked as exits that are visible
-  let visible-exits patches with [
-    is-exit? and distance myself <= visibility
-  ]
-  
-  if any? visible-exits [
-    ;; closest exit patch
-    let closest min-one-of visible-exits [ distance myself ]
-    report unit (vector-to [pxcor] of closest [pycor] of closest)
-  ]
-  
-  ;; no exit visible
-  report list 0 0
+  report rule-for-pos xcor ycor
 end
 
-
-to draw-door-visibility
-  clear-drawing
-  
-  ask patches with [is-exit? and is-main-exit?] [
-    sprout 1 [
-      set shape "circle empty"
-      set color green
-      set size visibility * 2
-      stamp
-      die
-    ]
-  ]
-end
-
+;; ========== COHESION ==========
 to-report group-cohesion-component
   ;for every agent in a spesific rediuos you want to go in a mean diraction of positioof the agents around you
-  let ns other people with [group-id = [group-id] of myself] in-radius centroid_dist
+  let ns other people with [group-id = [group-id] of myself]
   if any? ns [
     let cx mean [ xcor ] of ns
     let cy mean [ ycor ] of ns
-    report unit (vector-to cx cy)
+    report vector-to cx cy
   ]
   report list 0 0
 end
@@ -49,11 +24,12 @@ to-report neighbours-cohesion-component
   if any? ns [
     let cx mean [ xcor ] of ns
     let cy mean [ ycor ] of ns
-    report unit (vector-to cx cy)
+    report vector-to cx cy
   ]
   report list 0 0
 end
 
+;; ========== SEPARATION ==========
 to-report group-separation-component
   let ns other people with [ group-id = [group-id] of myself ] in-radius avoid_dist
   if any? ns [
@@ -69,7 +45,7 @@ to-report group-separation-component
       ]
       set away v-add away (unit (list ddx ddy))
     ]
-    report unit away
+    report away
   ]
   report list 0 0
 end
@@ -87,14 +63,14 @@ to-report neighbours-separation-component
       ]
       set away v-add away (unit (list ddx ddy))
     ]
-    report unit away
+    report away
   ]
   report list 0 0
 end
 
-
+;; ========== ALIGNMENT ==========
 to-report groups-alignment-component
-  let ns other people with [group-id = [group-id] of myself] in-radius alignment_dist
+  let ns other people with [group-id = [group-id] of myself]
   if any? ns [
     let vx mean [ item 0 velocity ] of ns
     let vy mean [ item 1 velocity ] of ns
@@ -113,6 +89,7 @@ to-report neighbours-alignment-component
   report list 0 0
 end
 
+;; ========== OBSTACLE ==========
 to-report obstacle-component
   let obs obstacles in-radius ease-dist
   if any? obs [
@@ -126,6 +103,10 @@ to-report obstacle-component
   ]
   report list 0 0
 end
+
+; ==========
+; MOVE
+; ==========
 
 to-report MOVE
   ;;;;;;;;;;;;;;; let v-goal goal-component
@@ -194,6 +175,7 @@ end
 ; PANIC UPDATE
 ; ==========
 to update-panic
+  ;----------------------------------------------
   ;; δ1: distance to goal vs ease distance
   ;; compute distance to closest visible exit
   let visible-exits patches with [
@@ -213,7 +195,8 @@ to update-panic
   
   let L max (list world-width world-height)
   let delta1 max list 0 ((D - ease-dist) / L)
-
+  
+  ;----------------------------------------------
   ;; δ2: mismatch with group
   let ns other people with [group-id = [group-id] of myself] in-radius alignment_dist
   let delta2-group 0
@@ -232,7 +215,7 @@ to update-panic
     set delta2-neigh mis / vmax
   ]
   
-
+  ;----------------------------------------------
   ;; δ3: group in discomfort (proxy: very slow agents)
   let nsC other people with [group-id = [group-id] of myself] in-radius centroid_dist
   let delta3-group 0
@@ -247,6 +230,7 @@ to update-panic
     set delta3-neigh (count nsC with [ v-mag velocity < 0.2 * vmax ]) / (count nsC)
   ]
 
+  ;----------------------------------------------
   ;; δ4: lagging compared to local min speed - group
   let vmin vmax
   if any? ns [ set vmin min (list vmin [ v-mag velocity ] of ns) ]
@@ -257,6 +241,8 @@ to update-panic
   if any? ns [ set vmin min (list vmin [ v-mag velocity ] of ns) ]
   let delta4-neigh max list 0 ((vmin - v-mag velocity) / vmax)
 
+  
+  ;----------------------------------------------
   ;; Combine
   let zeta ((delta1 + 0.66 * (delta2-group + delta3-group + delta4-group) + 0.33 * (delta2-neigh + delta3-neigh + delta4-neigh)) / 4)
   set gamma ((1 - panic-smooth) * gamma + panic-smooth * zeta)

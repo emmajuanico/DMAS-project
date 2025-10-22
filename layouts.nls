@@ -1,5 +1,96 @@
 ;; POSSIBLE LAYOUTS - RANODM, CINEMA 
 
+;; ========== DOOR SETUP ==========
+to setup-doors [layout-name]
+  let doors-list []
+
+  if layout-name = "cinema" [ set doors-list doors-cinema ]
+  if layout-name = "center-strip" [ set doors-list doors-center-strip ]
+  if layout-name = "layout-a" [ set doors-list doors-layout-a ]
+  if layout-name = "layout-b" [ set doors-list doors-layout-b ]
+  if layout-name = "layout-c" [ set doors-list doors-layout-c ]
+  if layout-name = "layout-d" [ set doors-list doors-layout-d ]
+  if layout-name = "layout-e" [ set doors-list doors-layout-e ]
+  if layout-name = "layout-f" [ set doors-list doors-layout-f ]
+  
+  let door-width 2
+  let door-depth 1
+  let half-width floor ((door-width / meters-per-patch) / 2)
+  let half-depth floor ((door-depth / meters-per-patch) / 2)
+
+  foreach doors-list [ exit-data ->
+    let x round (item 0 exit-data)
+    let y round (item 1 exit-data)
+    let vis item 2 exit-data
+    let id  item 3 exit-data
+
+    ;; Determine orientation based on wall
+    let horizontal? false
+    if (y = max-pycor or y = min-pycor) [ set horizontal? true ]
+
+    ;; Center patch
+    if patch x y != nobody [
+      ask patch x y [
+        set is-exit? true
+        set is-main-exit? true
+        set exit-id id
+        set visibility (vis / meters-per-patch)
+        set pcolor green
+      ]
+    ]
+
+    ifelse horizontal? [
+      ;; horizontal door along x-axis, expand perpendicular in y
+      foreach (range (x - half-width) (x + half-width + 1)) [ xx ->
+        let xx-round round xx
+        foreach (range (y - half-depth) (y + half-depth + 1)) [ yy ->
+          let yy-round round yy
+          if patch xx-round yy-round != nobody [
+            ask patch xx-round yy-round [
+              set is-exit? true
+              if xx-round != x or yy-round != y [ set is-main-exit? false ]
+              set exit-id id
+              set visibility (vis / meters-per-patch)
+              set pcolor green
+            ]
+          ]
+        ]
+      ]
+    ] [
+      ;; vertical door along y-axis, expand perpendicular in x
+      foreach (range (y - half-width) (y + half-width + 1)) [ yy ->
+        let yy-round round yy
+        foreach (range (x - half-depth) (x + half-depth + 1)) [ xx ->
+          let xx-round round xx
+          if patch xx-round yy-round != nobody [
+            ask patch xx-round yy-round [
+              set is-exit? true
+              if xx-round != x or yy-round != y [ set is-main-exit? false ]
+              set exit-id id
+              set visibility (vis / meters-per-patch)
+              set pcolor green
+            ]
+          ]
+        ]
+      ]
+    ]
+  ]
+end
+
+to draw-door-visibility
+  clear-drawing
+  
+  ask patches with [is-exit? and is-main-exit?] [
+    sprout 1 [
+      set shape "circle empty"
+      set color green
+      set size visibility * 2
+      stamp
+      die
+    ]
+  ]
+end
+
 
 ;; CENTER RANDOM STRIP
 ;; -------- CENTER STRIP --------
@@ -443,9 +534,7 @@ to initialize-agent-parameters [group-size myr gcol]
   set ease-dist      10 * r
   set avoid_dist     2 * r + 2 ;;group
   set da             10 * r + 2 ;;neigh
-  set centroid_dist  8 * r ;;group
   set dc             10 * r ;;neigh
-  set alignment_dist 4 * r ;;group
   set dl             10 * r ;;neigh
   
   set goal-factor        6.5
