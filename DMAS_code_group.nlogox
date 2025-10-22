@@ -219,11 +219,16 @@ to go
     let x_i list xcor ycor
     let v_i velocity
     let r_i r
+    let m_i weight
+    let c_i (2 * r * pi)  ;; agent's circumference
 
-    ; Compute total force: F_i = Σ_b f_i_b + Σ_j≠i f_i_j
+    ; Compute total force: F_i = f_v + Σ_b f_i_b + Σ_j≠i f_i_j
     let F_i list 0 0
+    
+    ; Restorative forced which steers the agent towards a desired velocity = m * a
+    let F_velocity v-scale v_i m_i   ;; v-scale (v-scale v_i (1 / time-step)) m_i                          (TODO)
 
-    ; Forces from boundaries (obstacles + walls)
+    ; Forces from boundaries (obstacles + walls) -> F_i_b
     let F_boundary list 0 0
 
     ask obstacles [
@@ -294,7 +299,7 @@ to go
     ; injury check based on total force magnitude
     let F_magnitude v-mag F_i
     
-    if (not injured?) and (F_magnitude > 1600) [
+    if (not injured?) and ((F_magnitude / c_i) > 1600) [
       set injured? true
       set velocity list 0 0
       set color grey
