@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <model version="NetLogo 7.0.0" snapToGrid="false">
-  <code><![CDATA[__includes [ "helpers.nls" "functions_gruops.nls" "grouping.nls" "layouts.nls" "map.nls"]
+  <code><![CDATA[__includes [ "helpers.nls" "functions_gruops.nls" "grouping.nls" "layouts.nls" "map.nls" "map_helpers.nls"]
 
 globals [
   panic-smooth
@@ -35,7 +35,7 @@ patches-own [
   visibility     ;; visibility radius
   is-main-exit?  ;; true for the patch that will draw the visibility circle
   node-id        ;; string like "N3" (or 0,1,2 if you prefer ints)
-  node-kind      ;; "goal" or "direction"
+  node-kind      ;; "goal" or "direction" or "next node"
   node-rule      ;; vector for the rule
 ]
 
@@ -59,6 +59,8 @@ people-own [
   separation-factor       ;;
   alignment-factor        ;;
   obstacle-factor         ;;
+  current-node-id         ;;
+  goal-vector
 ]
 
 ;; ========== SETUP ==========
@@ -80,32 +82,12 @@ to setup
     set visibility 0
     set pcolor black
   ]
-
-  ;; ========== SETUP DOORS DEPENDING ON LAYOUT ==========
-  setup-doors layout-choice
-  build-node-layout-a
-
+  
   set N (In_groups_of_1 + In_groups_of_2 + In_groups_of_3 + In_groups_of_4 + In_groups_of_5)
-
-  ;; ========== OBSTACLES BY LAYOUT ==========
-  if layout-choice = "center-strip" [ layout-center-strip ]
-  if layout-choice = "cinema" [ layout-cinema ]
-  if layout-choice = "layout-a" [ layout-none ]
-  if layout-choice = "layout-b" [ layout-none ]
-  if layout-choice = "layout-c" [ layout-none ]
-  if layout-choice = "layout-d" [ layout-none ]
-  if layout-choice = "layout-e" [ layout-none ]
-  if layout-choice = "layout-f" [ layout-f ]
-
-  ;; ========== SPAWN AGENTS BY LAYOUT ==========
-  if layout-choice = "cinema" [ spawn-cinema ]
-  if layout-choice = "center-strip" [ spawn-none ]
-  if layout-choice = "layout-a" [ spawn-none ]
-  if layout-choice = "layout-b" [ spawn-none ]
-  if layout-choice = "layout-c" [ spawn-none ]
-  if layout-choice = "layout-d" [ spawn-none ]
-  if layout-choice = "layout-e" [ spawn-none ]
-  if layout-choice = "layout-f" [ spawn-none ]
+  
+  
+  ;; choose layout (you probably already have a chooser named layout-choice)
+  setup-layout
 
   set evacuation-time 0
   reset-ticks
@@ -217,7 +199,7 @@ end
         <update></update>
       </pen>
     </plot>
-    <chooser x="12" y="8" height="60" variable="layout-choice" current="3" width="162" display="layout-choice">
+    <chooser x="12" y="8" height="60" variable="layout-choice" current="1" width="162" display="layout-choice">
       <choice type="string" value="center-strip"></choice>
       <choice type="string" value="cinema"></choice>
       <choice type="string" value="none"></choice>

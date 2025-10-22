@@ -1,5 +1,47 @@
 ;; POSSIBLE LAYOUTS - RANODM, CINEMA 
 
+to setup-layout
+  ;; ========== DOORS ==========
+  setup-doors layout-choice
+
+  ;; ========== NODES & OBSTACLES & AGENTS ==========
+  if layout-choice = "center-strip" [
+    layout-center-strip
+    spawn-none
+  ]
+  if layout-choice = "cinema" [
+    layout-cinema
+    build-nodes-cinema
+    spawn-cinema
+  ]
+  if layout-choice = "layout-a" [
+    layout-none
+    build-node-layout-a
+    spawn-none
+  ]
+  if layout-choice = "layout-b" [ 
+    layout-none
+    spawn-none
+  ]
+  if layout-choice = "layout-c" [ 
+    layout-none
+    spawn-none
+  ]
+  if layout-choice = "layout-d" [ 
+    layout-none
+    spawn-none
+  ]
+  if layout-choice = "layout-e" [ 
+    layout-none
+    spawn-none
+  ]
+  if layout-choice = "layout-f" [ 
+    layout-f
+    spawn-none
+  ]
+end
+
+
 ;; ========== DOOR SETUP ==========
 to setup-doors [layout-name]
   let doors-list []

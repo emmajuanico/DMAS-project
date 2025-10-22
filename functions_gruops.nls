@@ -2,9 +2,13 @@
 ; BEHAVIOR COMPONENTS
 ; ==========
 
+
 ;; ========== GOAL ==========
 to-report goal-component
-  report rule-for-pos xcor ycor
+  if current-node-id != [node-id] of patch-here [
+    set goal-vector rule-for-pos xcor ycor
+  ]
+  report goal-vector
 end
 
 ;; ========== COHESION ==========

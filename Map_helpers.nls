@@ -1,0 +1,110 @@
+;; Add a QUAD node by giving 4 corners (in PATCH coords).
+;; Order corners either clockwise or counter-clockwise.
+to add-quad-node [x1 y1 x2 y2 x3 y3 x4 y4 id kind rule]
+  let pts (list (list x1 y1) (list x2 y2) (list x3 y3) (list x4 y4))
+  add-poly-node pts id kind rule
+end
+
+; meters -> patches wrapper
+to add-quad-node-m [x1m y1m x2m y2m x3m y3m x4m y4m id kind rule]
+  ; use round if you want patch-aligned corners
+  let x1 (x1m / meters-per-patch)
+  let y1 (y1m / meters-per-patch)
+  let x2 (x2m / meters-per-patch)
+  let y2 (y2m / meters-per-patch)
+  let x3 (x3m / meters-per-patch)
+  let y3 (y3m / meters-per-patch)
+  let x4 (x4m / meters-per-patch)
+  let y4 (y4m / meters-per-patch)
+  add-quad-node x1 y1 x2 y2 x3 y3 x4 y4 id kind rule
+end
+
+
+;; Add a POLYGON node (any number of corners ≥ 3), PATCH coords.
+to add-poly-node [pts id kind rule]
+  ;; quick bounding box to limit checks
+  let xs map [p -> item 0 p] pts
+  let ys map [p -> item 1 p] pts
+  let xmin floor min xs
+  let xmax ceiling max xs
+  let ymin floor min ys
+  let ymax ceiling max ys
+  
+  ask patches with [pxcor >= xmin and pxcor <= xmax and
+                    pycor >= ymin and pycor <= ymax] [
+    let x pxcor
+    let y pycor
+    if point-in-poly-or-edge? x y pts [
+      set node-id id
+      set node-kind kind
+      set node-rule rule
+    ]
+  ]
+end
+
+
+
+;; =============== GEOMETRY HELPERS ========================
+
+;; inclusive test: inside polygon OR exactly on an edge
+to-report point-in-poly-or-edge? [x y pts]
+  if point-on-any-edge? x y pts [ report true ]
+  report point-in-poly? x y pts
+end
+
+;; classic even–odd (ray casting). Works for convex/concave polygons.
+to-report point-in-poly? [x y pts]
+  let inside? false
+  let nPoints length pts
+  let j nPoints - 1
+  let i 0
+  while [i < nPoints] [
+    let xi item 0 item i pts
+    let yi item 1 item i pts
+    let xj item 0 item j pts
+    let yj item 1 item j pts
+
+    ;; edge crosses the horizontal ray upward/downward?
+    if (((yi > y) != (yj > y)) and
+        (x < (xj - xi) * (y - yi) / ((yj - yi) + 0.0) + xi)) [
+      set inside? not inside?
+    ]
+    set j i
+    set i i + 1
+  ]
+  report inside?
+end
+
+;; boundary inclusion (point lies on any polygon segment)
+to-report point-on-any-edge? [x y pts]
+  let nPoints length pts
+  let j nPoints - 1
+  let i 0
+  while [i < nPoints] [
+    let x1 item 0 item j pts
+    let y1 item 1 item j pts
+    let x2 item 0 item i pts
+    let y2 item 1 item i pts
+    if point-on-seg? x y x1 y1 x2 y2 [ report true ]
+    set j i
+    set i i + 1
+  ]
+  report false
+end
+
+;; point-on-line-segment test with bounding-box check
+to-report point-on-seg? [x y x1 y1 x2 y2]
+  ;; quick reject by bounding box
+  let xmin min list x1 x2
+  let xmax max list x1 x2
+  let ymin min list y1 y2
+  let ymax max list y1 y2
+  if not (x >= xmin and x <= xmax and y >= ymin and y <= ymax) [
+    report false
+  ]
+
+  ;; colinearity via cross product ≈ 0 (tolerance for integer/float math)
+  let cross ((x - x1) * (y2 - y1) - (y - y1) * (x2 - x1))
+  report (abs cross) <= 1e-6
+end
+

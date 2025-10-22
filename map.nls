@@ -1,49 +1,6 @@
-;; Add a QUAD node by giving 4 corners (in PATCH coords).
-;; Order corners either clockwise or counter-clockwise.
-to add-quad-node [x1 y1 x2 y2 x3 y3 x4 y4 id kind rule]
-  let pts (list (list x1 y1) (list x2 y2) (list x3 y3) (list x4 y4))
-  add-poly-node pts id kind rule
-end
-
-; meters -> patches wrapper
-to add-quad-node-m [x1m y1m x2m y2m x3m y3m x4m y4m id kind rule]
-  ; use round if you want patch-aligned corners
-  let x1 (x1m / meters-per-patch)
-  let y1 (y1m / meters-per-patch)
-  let x2 (x2m / meters-per-patch)
-  let y2 (y2m / meters-per-patch)
-  let x3 (x3m / meters-per-patch)
-  let y3 (y3m / meters-per-patch)
-  let x4 (x4m / meters-per-patch)
-  let y4 (y4m / meters-per-patch)
-  add-quad-node x1 y1 x2 y2 x3 y3 x4 y4 id kind rule
-end
-
-
-;; Add a POLYGON node (any number of corners ≥ 3), PATCH coords.
-to add-poly-node [pts id kind rule]
-  ;; quick bounding box to limit checks
-  let xs map [p -> item 0 p] pts
-  let ys map [p -> item 1 p] pts
-  let xmin floor min xs
-  let xmax ceiling max xs
-  let ymin floor min ys
-  let ymax ceiling max ys
-  
-  ask patches with [pxcor >= xmin and pxcor <= xmax and
-                    pycor >= ymin and pycor <= ymax] [
-    let x pxcor
-    let y pycor
-    if point-in-poly-or-edge? x y pts [
-      set node-id id
-      set node-kind kind
-      set node-rule rule
-    ]
-  ]
-end
-
-
+;; ==============================================
 ;; =============== RULES ========================
+;; ==============================================
 ;; Returns a vector [dx dy] for the patch at position (x,y)
 ;; Assumes patches-own [nodeKind nodeRule]
 to-report rule-for-pos [x y]
@@ -64,9 +21,77 @@ to-report rule-for-pos [x y]
       [ vec-dir-certain   x y rule ]
       [ vec-dir-uncertain x y rule ]
   ]
+  
+  if kind = "next-node" [
+    report ifelse-value (length rule = 2)
+      [ vec-next-node-certain   x y rule ]
+      [ vec-next-node-uncertain x y rule ]
+  ]
 
   ;; default if kind unrecognized
   report (list 0 0)
+end
+
+;; ========== NEXT NODE rules ==========
+
+;; nodeRule (NEXT NODE certain): rule = target node-id (number or string)
+;; Returns a unit vector [dx dy] from (x,y) toward the closest patch with node-id = rule
+to-report vec-next-node-certain [x y rule]
+  let targets patches with [node-id = rule]
+  if not any? targets [ report list 0 0 ]
+
+  ;; pick nearest by squared distance (faster than distance)
+  let p min-one-of targets [ (pxcor - x) * (pxcor - x) + (pycor - y) * (pycor - y) ]
+
+  ;; vector from agent -> target, then normalize
+  let vec v-sub (list [pxcor] of p [pycor] of p) (list x y)
+  report unit vec
+end
+
+;; nodeRule (NEXT NODE uncertain):
+;; rule examples:
+;;   [1 2 3]                → uniform between node-ids 1,2,3
+;;   [1 0.7  2 0.3]         → weighted: 70% → node 1, 30% → node 2
+to-report vec-next-node-uncertain [x y rule]
+  let ruleLen length rule
+  if ruleLen < 1 [ report list 0 0 ]
+
+  ;; ===== determine if weighted or uniform =====
+  let weighted? (ruleLen mod 2 = 0)   ;; even length ⇒ has weights (id,prob,id,prob,...)
+
+  let chosen-id nobody
+
+  ifelse weighted? [
+  ;; ---- weighted random draw ----
+    let total 0
+    let i 0
+    while [i < ruleLen] [
+      set total total + item (i + 1) rule
+      set i i + 2
+    ]
+    let pick random-float total
+    let cum 0
+    set i 0
+    while [i < ruleLen] [
+      set cum cum + item (i + 1) rule
+      if pick < cum [
+        set chosen-id item i rule
+        set i ruleLen
+      ]
+      set i i + 2
+    ]
+  ] [
+    ;; ---- uniform choice ----
+    set chosen-id one-of rule
+  ]
+
+  ;; ===== now compute vector toward chosen node =====
+  let targets patches with [node-id = chosen-id]
+  if not any? targets [ report list 0 0 ]
+
+  let p min-one-of targets [ (pxcor - x) * (pxcor - x) + (pycor - y) * (pycor - y) ]
+  let vec v-sub (list [pxcor] of p [pycor] of p) (list x y)
+  report unit vec
 end
 
 
@@ -154,73 +179,9 @@ to-report vec-dir-uncertain [x y rule]
 end
 
 
-
-;; =============== GEOMETRY HELPERS ========================
-
-;; inclusive test: inside polygon OR exactly on an edge
-to-report point-in-poly-or-edge? [x y pts]
-  if point-on-any-edge? x y pts [ report true ]
-  report point-in-poly? x y pts
-end
-
-;; classic even–odd (ray casting). Works for convex/concave polygons.
-to-report point-in-poly? [x y pts]
-  let inside? false
-  let nPoints length pts
-  let j nPoints - 1
-  let i 0
-  while [i < nPoints] [
-    let xi item 0 item i pts
-    let yi item 1 item i pts
-    let xj item 0 item j pts
-    let yj item 1 item j pts
-
-    ;; edge crosses the horizontal ray upward/downward?
-    if (((yi > y) != (yj > y)) and
-        (x < (xj - xi) * (y - yi) / ((yj - yi) + 0.0) + xi)) [
-      set inside? not inside?
-    ]
-    set j i
-    set i i + 1
-  ]
-  report inside?
-end
-
-;; boundary inclusion (point lies on any polygon segment)
-to-report point-on-any-edge? [x y pts]
-  let nPoints length pts
-  let j nPoints - 1
-  let i 0
-  while [i < nPoints] [
-    let x1 item 0 item j pts
-    let y1 item 1 item j pts
-    let x2 item 0 item i pts
-    let y2 item 1 item i pts
-    if point-on-seg? x y x1 y1 x2 y2 [ report true ]
-    set j i
-    set i i + 1
-  ]
-  report false
-end
-
-;; point-on-line-segment test with bounding-box check
-to-report point-on-seg? [x y x1 y1 x2 y2]
-  ;; quick reject by bounding box
-  let xmin min list x1 x2
-  let xmax max list x1 x2
-  let ymin min list y1 y2
-  let ymax max list y1 y2
-  if not (x >= xmin and x <= xmax and y >= ymin and y <= ymax) [
-    report false
-  ]
-
-  ;; colinearity via cross product ≈ 0 (tolerance for integer/float math)
-  let cross ((x - x1) * (y2 - y1) - (y - y1) * (x2 - x1))
-  report (abs cross) <= 1e-6
-end
-
-
-
+;; ==============================================
+;; Nodes for layout
+;; ==============================================
 
 ;; --- ONE BIG NODE for layout-a ---
 to build-node-layout-a
@@ -231,7 +192,140 @@ to build-node-layout-a
 
   ask patches [
     set node-id 1
+    set node-kind "next-node"
+    set node-rule ("door-1")   ;; certain GOAL: [gx gy]
+  ]
+end
+
+;; --- ONE BIG NODE for layout-cinema ---
+to build-nodes-cinema
+  ;; ===== match your layout-cinema parameters =====
+  let seat-size-m         1
+  let seat-spacing-m      0
+  let row-spacing-m       0.7
+  let side-block-seats    5
+  let middle-block-seats  10
+  let num-rows            12
+
+  ;; ----- convert to patch units -----
+  let seat-size     (seat-size-m     / meters-per-patch)
+  let seat-spacing  (seat-spacing-m  / meters-per-patch)
+  let row-spacing   (row-spacing-m   / meters-per-patch)
+
+  let seat-size-p   round seat-size
+  let seat-space-p  round seat-spacing
+  let step          (seat-size-p + seat-space-p)
+
+  let left-wall     min-pxcor
+  let right-wall    max-pxcor
+
+  let bottom        (min-pycor + 5)
+  let top           bottom + num-rows * (seat-size + row-spacing)
+
+  ;; ----- horizontal geometry per row (same math as layout-cinema) -----
+  let left_center_offset  round (seat-size-p / 2)
+  let left_start_x        (left-wall + left_center_offset)
+  let last_left_center    (left_start_x + (side-block-seats - 1) * step)
+
+  let right_center_offset round (seat-size-p / 2)
+  let right_start_center  (right-wall - right_center_offset)
+  let first_right_center  (right_start_center - (side-block-seats - 1) * step)
+
+  let middle_width        ((middle-block-seats - 1) * step)
+  let available_space     (first_right_center - last_left_center - middle_width)
+  let aisle_width         max list 2 floor (available_space / 2)
+
+  let middle_first_candidate (last_left_center + aisle_width)
+  let middle_last_allowed    (first_right_center - aisle_width)
+  let compressed? (middle_last_allowed - middle_first_candidate < middle_width)
+
+  let middle_step step
+  if compressed? [
+    if middle-block-seats > 1 [
+      let available (middle_last_allowed - middle_first_candidate)
+      set middle_step max list 1 floor (available / (middle-block-seats - 1))
+    ]
+  ]
+
+  ;; block extents (use half-seat to cover seat bodies)
+  let middle_xmin (middle_first_candidate - seat-size / 2)
+  let middle_xmax (middle_first_candidate + (middle-block-seats - 1) * middle_step + seat-size / 2)
+  let left_xmin   left-wall
+  let left_xmax   (last_left_center + seat-size / 2)
+  let right_xmin  (first_right_center - seat-size / 2)
+  let right_xmax  right-wall
+
+  let aisle1_xmin left_xmax
+  let aisle1_xmax middle_xmin
+  let aisle2_xmin middle_xmax
+  let aisle2_xmax right_xmin
+
+  ;; vertical extents of seating area
+  let ymin (bottom - seat-size / 2)
+  let ymax (top    + seat-size / 2)
+
+  ;; top/bottom bands near walls (for GO nodes that point to doors)
+  let bandH 3                              ;; height in patches; tweak if you like
+  let top_ymin  (ymax - bandH)
+  let bot_ymax  (ymin + bandH)
+
+  ;; doors (cinema has 4: TL, TR, BL, BR)
+  let ds doors-cinema
+  let topDoors    (list (item 0 ds) (item 1 ds))    ;; TL, TR
+  let bottomDoors (list (item 2 ds) (item 3 ds))    ;; BL, BR
+
+  ;; ========= paint nodes =========
+  ;; reset (not required if you called clear-all)
+  ask patches [ set node-id nobody set node-kind "" set node-rule [] ]
+
+  ;; A) TOP/BOTTOM GO bands (to nearest door on that wall)
+  set-rect-go-nearest round left_xmin   round right_xmax round top_ymin round ymax  1 topDoors
+  set-rect-go-nearest round left_xmin   round right_xmax round ymin     round bot_ymax 2 bottomDoors
+
+  ;; B) Interior DIRECTION nodes (you can tweak dx/dy below to match arrows)
+  ;;    Side seating blocks push toward center aisles
+  set-rect-direction  round left_xmin  round left_xmax   round bot_ymax round top_ymin  3  1 0    ;; → right
+  set-rect-direction  round right_xmin round right_xmax  round bot_ymax round top_ymin  4 -1 0    ;; ← left
+
+  ;;    Middle block: send flow upward (positive y) toward top band
+  set-rect-direction  round middle_xmin round middle_xmax round bot_ymax round top_ymin 5  0 1
+
+  ;;    Aisles: send flow upward as well (you can split upper/lower if desired)
+  set-rect-direction  round aisle1_xmin round aisle1_xmax round bot_ymax round top_ymin 6  0 1
+  set-rect-direction  round aisle2_xmin round aisle2_xmax round bot_ymax round top_ymin 7  0 1
+end
+
+
+
+
+to set-rect-direction [xmin xmax ymin ymax id dir-x dir-y]
+  ask patches with [pxcor >= xmin and pxcor <= xmax and
+                    pycor >= ymin and pycor <= ymax] [
+    set node-id   id
+    set node-kind "direction"
+    set node-rule (list dir-x dir-y)         ;; direction vector
+  ]
+end
+
+to set-rect-go-nearest [xmin xmax ymin ymax id doors]
+  ;; doors is a list of (list x y vis door-id). We'll choose the nearest (x y).
+  ask patches with [pxcor >= xmin and pxcor <= xmax and
+                    pycor >= ymin and pycor <= ymax] [
+    let gx 0
+    let gy 0
+    let best 1e9
+    foreach doors [ d ->
+      let dir-x pxcor - (item 0 d)
+      let dir-y pycor - (item 1 d)
+      let dist dir-x * dir-x + dir-y * dir-y
+      if dist < best [
+        set best dist
+        set gx item 0 d
+        set gy item 1 d
+      ]
+    ]
+    set node-id   id
     set node-kind "goal"
-    set node-rule (list gx gy)   ;; certain GOAL: [gx gy]
+    set node-rule (list round gx round gy)  ;; certain GOAL to nearest door
   ]
 end
