@@ -166,7 +166,7 @@ end
 ; ==========
 ;; True if a circle of radius `myr` at (nx, ny) is inside the world
 ;; and does not overlap any other turtle’s circle.
-to-report safe-spot? [nx ny myr]
+to-report safe-spot? [nx ny myr panic-visibility]
   ;; 1) inside boundaries?
   if not (nx > min-pxcor and nx < max-pxcor and ny > min-pycor and ny < max-pycor) [
     report false
@@ -174,7 +174,7 @@ to-report safe-spot? [nx ny myr]
 
   ;; 2) overlap with other people/turtles?
   ;; consider only nearby turtles for speed
-  let nearby-turtles other turtles in-radius (myr + 4) ;; loose radius for candidate search
+  let nearby-turtles other turtles in-radius (myr + panic-visibility) ;; loose radius for candidate search
   if any? nearby-turtles [
     ;; check pairwise with their radius attribute
     if any? nearby-turtles with [

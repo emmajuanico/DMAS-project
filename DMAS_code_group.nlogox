@@ -194,11 +194,13 @@ to go
     let v-goal goal-component
     let v-new v-plus MOVE v-goal goal-factor
     update-panic
+    let panic-visibility 3
 
     if gamma >= 0.8 [ ;; If the agent’s panic level is greater than or equal to 0.5:
       set v-new (list 0 0) ;Reset intended velocity to zero
       set separation-factor 0 ;Set cohesion, alignment, and obstacle weights to zero -to show herding behavior
       set alignment-factor 0
+      set panic-visibility ((1 - gamma) * panic-visibility)
       
       set v-new MOVE ;Recompute the intended velocity using only the movement function (without group/obstacle adjustments)
       
@@ -210,12 +212,18 @@ to go
     set v-new v-scale v-new (1 - gamma)
     set v-new v-plus v-new velocity gamma
     set velocity limit-speed v-new vmax
+    if v-mag velocity < 0.05 [
+      ;; give them a tiny random kick so they can attempt to re-evaluate positions
+      set velocity (list (random-float 1 - 0.5) (random-float 1 - 0.5))
+      set velocity v-scale (unit velocity) (0.01 * vmax)
+    ]
+
 
     let pnext v-scale-add (list xcor ycor) velocity time-step
     let nx (item 0 pnext)
     let ny (item 1 pnext)
 
-    ifelse safe-spot? nx ny r [
+    ifelse safe-spot? nx ny r panic-visibility[
       setxy nx ny
     ] [
       ;; blocked: try smaller step in original direction
@@ -223,7 +231,7 @@ to go
       let pshort v-scale-add (list xcor ycor) damped (time-step * 0.5)
       let sx (item 0 pshort)
       let sy (item 1 pshort)
-      ifelse safe-spot? sx sy r [
+      ifelse safe-spot? sx sy r panic-visibility[
         setxy sx sy
       ] [
         ;; still blocked: try a small random lateral sidestep
@@ -231,7 +239,32 @@ to go
         let step v-scale (unit (list (cos angle) (sin angle))) (time-step * 0.5)
         let rx (item 0 step) + xcor
         let ry (item 1 step) + ycor
-        if safe-spot? rx ry r [ setxy rx ry ]
+        ifelse safe-spot? rx ry r panic-visibility[ setxy rx ry ]
+        [
+        ;; final fallback: try to actively nudge using separation components
+        let sep1 group-separation-component
+        let sep2 neighbours-separation-component
+        let sep v-add sep1 sep2
+        ifelse v-mag sep > 0.001 [
+          let nudge v-scale (unit sep) (time-step * vmax * 0.5)
+          let nx2 xcor + item 0 nudge
+          let ny2 ycor + item 1 nudge
+          if safe-spot? nx2 ny2 r panic-visibility[ setxy nx2 ny2 ]
+          ;; else try a smaller nudge
+          if not safe-spot? nx2 ny2 r panic-visibility[
+            let nudge2 v-scale (unit sep) (time-step * vmax * 0.25)
+            let nx3 xcor + item 0 nudge2
+            let ny3 ycor + item 1 nudge2
+            if safe-spot? nx3 ny3 r panic-visibility[ setxy nx3 ny3 ]
+          ]
+        ] [
+          ;; if separation vector is tiny, try a tiny random jitter to escape deadlock
+          let jitter-step v-scale (unit (list (random-float 1 - 0.5) (random-float 1 - 0.5))) (time-step * 0.25)
+          let jx xcor + item 0 jitter-step
+          let jy ycor + item 1 jitter-step
+          if safe-spot? jx jy r panic-visibility[ setxy jx jy ]
+        ]
+      ]
       ]
     ]
 
@@ -304,10 +337,10 @@ end
     <monitor x="232" precision="0" y="299" height="60" fontSize="11" width="100" display="Groups of 4">In_groups_of_4 / 4</monitor>
     <monitor x="232" precision="0" y="231" height="60" fontSize="11" width="100" display="Groups of 3">In_groups_of_3 / 3</monitor>
     <monitor x="232" precision="0" y="163" height="60" fontSize="11" width="100" display="Groups of 2">In_groups_of_2 / 2</monitor>
-    <slider x="16" step="3" y="231" max="100" width="208" display="In_groups_of_3" height="60" min="0" direction="Horizontal" default="90.0" variable="In_groups_of_3" units="people"></slider>
-    <slider x="16" step="4" y="299" max="100" width="208" display="In_groups_of_4" height="60" min="0" direction="Horizontal" default="92.0" variable="In_groups_of_4" units="people"></slider>
-    <slider x="16" step="2" y="163" max="100" width="208" display="In_groups_of_2" height="60" min="0" direction="Horizontal" default="84.0" variable="In_groups_of_2" units="people"></slider>
-    <slider x="16" step="5" y="364" max="100" width="208" display="In_groups_of_5" height="60" min="0" direction="Horizontal" default="85.0" variable="In_groups_of_5" units="people"></slider>
+    <slider x="16" step="3" y="231" max="100" width="208" display="In_groups_of_3" height="60" min="0" direction="Horizontal" default="21.0" variable="In_groups_of_3" units="people"></slider>
+    <slider x="16" step="4" y="299" max="100" width="208" display="In_groups_of_4" height="60" min="0" direction="Horizontal" default="28.0" variable="In_groups_of_4" units="people"></slider>
+    <slider x="16" step="2" y="163" max="100" width="208" display="In_groups_of_2" height="60" min="0" direction="Horizontal" default="26.0" variable="In_groups_of_2" units="people"></slider>
+    <slider x="16" step="5" y="364" max="100" width="208" display="In_groups_of_5" height="60" min="0" direction="Horizontal" default="25.0" variable="In_groups_of_5" units="people"></slider>
     <monitor x="232" precision="0" y="95" height="60" fontSize="11" width="100" display="Groups of 1">In_groups_of_1 / 1</monitor>
     <button x="16" y="486" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="92">Setup</button>
     <button x="116" y="486" height="40" disableUntilTicks="false" forever="true" kind="Observer" width="92">go</button>

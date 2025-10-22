@@ -420,7 +420,7 @@ to spawn-none
         ;; create all members at once
         create-people group-size [
           let myr (0.25 + random-float 0.15) / meters-per-patch
-          let pos find-safe-spot-around cx cy spread (myr)
+          let pos find-safe-spot-around cx cy spread (myr) (myr + 3)
           setxy item 0 pos item 1 pos
           
           initialize-agent-parameters group-size myr gcol

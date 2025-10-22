@@ -53,11 +53,11 @@ to-report random-center-patch [margin tries]
 end
 
 ;; Find a safe spot around (cx, cy). Expands radius until something is free.
-to-report find-safe-spot-around [cx cy spread myr]
+to-report find-safe-spot-around [cx cy spread myr panic-visibility]
   let world-max max (list world-width world-height)
 
   ;; If literally nowhere is legal, bail early.
-  if not any? patches with [ safe-spot? pxcor pycor myr ] [
+  if not any? patches with [ safe-spot? pxcor pycor myr panic-visibility] [
     report list cx cy  ;; or: report nobody
   ]
 
@@ -65,7 +65,7 @@ to-report find-safe-spot-around [cx cy spread myr]
   while [ true ] [
     let candidates patches with [
       distancexy cx cy <= spread and
-      safe-spot? pxcor pycor myr
+      safe-spot? pxcor pycor myr panic-visibility
     ]
     if any? candidates [
       let p one-of candidates
