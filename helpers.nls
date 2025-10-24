@@ -1,3 +1,39 @@
+; ==========
+; Arrows
+; ==========
+
+to-report clamp [v lo hi]
+  report min list hi (max list lo v)
+end
+
+;; Turtle-context arrow drawer (safe near borders)
+to draw-vel-arrow-turtle [vx vy scale col]
+  let sx xcor
+  let sy ycor
+  let ex sx + vx * scale
+  let ey sy + vy * scale
+
+  ;; clamp end to world bounds so setxy never goes out of range
+  set ex clamp ex min-pxcor max-pxcor
+  set ey clamp ey min-pycor max-pycor
+
+  hatch 1 [
+    hide-turtle
+    set color col
+    set pen-size 1
+    setxy sx sy
+    pen-down
+    setxy ex ey   ;; now guaranteed in-bounds
+    pen-up
+    die
+  ]
+end
+
+to-report mean-gamma-neighbors [radius]
+  let nb other people in-radius radius
+  if any? nb [ report mean [gamma] of nb ]
+  report gamma   ;; fallback: keep own gamma if no neighbors
+end
 
 ; ==========
 ; VECTOR HELPERS

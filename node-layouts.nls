@@ -1,0 +1,187 @@
+
+;; ==============================================
+;; Nodes for layout
+;; ==============================================
+
+;; --- ONE BIG NODE for layout-a ---
+to build-node-layout-a
+  ;; doors-layout-a -> [(x y visibility id)], take the first (and only) door
+  let d first doors-layout-a
+  let gx round item 0 d
+  let gy round item 1 d
+
+  ask patches [
+    set node-id "node-1"
+    set node-kind "next-node"
+    set node-rule ["exit-0"]    ;; certain GOAL: [gx gy]
+  ]
+end
+
+;;layout b
+to build-node-layout-b
+  let doors doors-layout-b
+
+  ;; clear any previous node info
+  ask patches [
+    set node-id nobody
+    set node-kind ""
+    set node-rule []
+  ]
+
+  ;; ====== 1. Assign 100% zones for each door ======
+  foreach doors [ d ->
+    let gx round item 0 d
+    let gy round item 1 d
+    let vis item 2 d
+    let id item 3 d
+    let rule (list (word "exit-" id))  
+
+    ;; square visibility zone centered at the door
+    let square round (vis / meters-per-patch)
+
+    ask patches with [
+      abs (pxcor - gx) < square and abs (pycor - gy) < square
+    ] [
+      set node-id id
+      set node-kind "next-node"
+      set node-rule rule
+    ]
+  ]
+
+  ;; ====== 2. Assign remaining patches probabilistically ======
+  let remaining patches with [node-id = nobody]
+
+  ask remaining [
+    set node-id 99  
+    set node-kind "next-node"
+    ;; Probabilities: 50% → exit-1, 50% → exit-2
+    set node-rule ["exit-0" 0.5 "exit-1" 0.5]
+  ]
+end
+
+;;layout c
+to build-node-layout-c
+  let doors doors-layout-c
+
+  ;; clear any previous node info
+  ask patches [
+    set node-id nobody
+    set node-kind ""
+    set node-rule []
+  ]
+
+  ;; ====== 1. Assign 100% zones for each door ======
+  foreach doors [ d ->
+    let gx round item 0 d
+    let gy round item 1 d
+    let vis item 2 d
+    let id item 3 d
+    let rule (list (word "exit-" id))  
+
+    ;; square visibility zone centered at the door
+    let square round (vis / meters-per-patch)
+
+    ask patches with [
+      abs (pxcor - gx) <= square and abs (pycor - gy) <= square
+    ] [
+      set node-id id
+      set node-kind "next-node"
+      set node-rule rule
+    ]
+  ]
+
+  ;; ====== 2. Assign remaining patches probabilistically ======
+  let remaining patches with [node-id = nobody]
+
+  ask remaining [
+    set node-id 99  
+    set node-kind "next-node"
+    ;; Probabilities: 80% → exit-0 20% → exit-1
+    set node-rule ["exit-0" 0.8 "exit-1" 0.2]
+  ]
+end
+
+;;layout d
+to build-node-layout-d
+  let doors doors-layout-d
+
+  ;; clear any previous node info
+  ask patches [
+    set node-id nobody
+    set node-kind ""
+    set node-rule []
+  ]
+
+  ;; ====== 1. Assign 100% zones for each door ======
+  foreach doors [ d ->
+    let gx round item 0 d
+    let gy round item 1 d
+    let vis item 2 d
+    let id item 3 d
+    let rule (list (word "exit-" id))  
+
+    ;; square visibility zone centered at the door
+    let square round (vis / meters-per-patch)
+
+    ask patches with [
+      abs (pxcor - gx) <= square and abs (pycor - gy) <= square
+    ] [
+      set node-id id
+      set node-kind "next-node"
+      set node-rule rule
+    ]
+  ]
+
+  ;; ====== 2. Assign remaining patches probabilistically ======
+  let remaining patches with [node-id = nobody]
+
+  ask remaining [
+    set node-id 99  
+    set node-kind "next-node"
+    ;; Probabilities: 50% → exit-0 50% → exit-1
+    set node-rule ["exit-0" 0.5 "exit-1" 0.5]
+  ]
+end
+
+
+;;layout e
+to build-node-layout-e
+  let doors doors-layout-e
+
+  ;; clear any previous node info
+  ask patches [
+    set node-id nobody
+    set node-kind ""
+    set node-rule []
+  ]
+
+  ;; ====== 1. Assign 100% zones for each door ======
+  foreach doors [ d ->
+    let gx round item 0 d
+    let gy round item 1 d
+    let vis item 2 d
+    let id item 3 d
+    let rule (list (word "exit-" id))  
+
+    ;; square visibility zone centered at the door
+    let square round (vis /(sqrt 2 * meters-per-patch))
+
+    ask patches with [
+      abs (pxcor - gx) <= square and abs (pycor - gy) <= square
+    ] [
+      set node-id id
+      set node-kind "next-node"
+      set node-rule rule
+    ]
+  ]
+
+  ;; ====== 2. Assign remaining patches probabilistically ======
+  let remaining patches with [node-id = nobody]
+
+  ask remaining [
+    set node-id 99  
+    set node-kind "next-node"
+    ;; Probabilities: 50% → exit-0 50% → exit-1
+    set node-rule ["exit-0" 0.5 "exit-1" 0.5]
+  ]
+end

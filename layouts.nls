@@ -1,8 +1,6 @@
 ;; POSSIBLE LAYOUTS - RANODM, CINEMA 
 
 to setup-layout
-  ;; ========== DOORS ==========
-  setup-doors layout-choice
 
   ;; ========== NODES & OBSTACLES & AGENTS ==========
   if layout-choice = "center-strip" [
@@ -11,7 +9,6 @@ to setup-layout
   ]
   if layout-choice = "cinema" [
     layout-cinema
-    build-nodes-cinema
     spawn-cinema
   ]
   if layout-choice = "layout-a" [
@@ -21,24 +18,31 @@ to setup-layout
   ]
   if layout-choice = "layout-b" [ 
     layout-none
+    build-node-layout-b
     spawn-none
   ]
   if layout-choice = "layout-c" [ 
     layout-none
+    build-node-layout-c
     spawn-none
   ]
   if layout-choice = "layout-d" [ 
     layout-none
+    build-node-layout-d
     spawn-none
   ]
   if layout-choice = "layout-e" [ 
     layout-none
+    build-node-layout-e
     spawn-none
   ]
   if layout-choice = "layout-f" [ 
     layout-f
     spawn-none
   ]
+  
+  ;; ========== DOORS ==========
+  setup-doors layout-choice
 end
 
 
@@ -76,6 +80,9 @@ to setup-doors [layout-name]
         set is-exit? true
         set is-main-exit? true
         set exit-id id
+        set node-id (word "exit-" id)
+        set node-kind "next-node"
+        set node-rule node-id
         set visibility (vis / meters-per-patch)
         set pcolor green
       ]
@@ -92,6 +99,9 @@ to setup-doors [layout-name]
               set is-exit? true
               if xx-round != x or yy-round != y [ set is-main-exit? false ]
               set exit-id id
+              set node-id (word "exit-" id)
+              set node-kind "next-node"
+              set node-rule node-id
               set visibility (vis / meters-per-patch)
               set pcolor green
             ]
@@ -109,6 +119,9 @@ to setup-doors [layout-name]
               set is-exit? true
               if xx-round != x or yy-round != y [ set is-main-exit? false ]
               set exit-id id
+              set node-id (word "exit-" id)
+              set node-kind "next-node"
+              set node-rule node-id
               set visibility (vis / meters-per-patch)
               set pcolor green
             ]

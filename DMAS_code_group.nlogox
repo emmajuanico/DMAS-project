@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <model version="NetLogo 7.0.0" snapToGrid="false">
-  <code><![CDATA[__includes [ "helpers.nls" "functions_gruops.nls" "grouping.nls" "layouts.nls" "map.nls" "map_helpers.nls"]
+  <code><![CDATA[__includes [ "helpers.nls" "functions_gruops.nls" "grouping.nls" "layouts.nls" "map.nls" "map_helpers.nls" "node-layouts.nls"]
 
 globals [
   panic-smooth
@@ -35,7 +35,7 @@ patches-own [
   visibility     ;; visibility radius
   is-main-exit?  ;; true for the patch that will draw the visibility circle
   node-id        ;; string like "N3" (or 0,1,2 if you prefer ints)
-  node-kind      ;; "goal" or "direction" or "next node"
+  node-kind      ;; "goal" or "direction" or "next-node"
   node-rule      ;; vector for the rule
 ]
 
@@ -45,7 +45,7 @@ people-own [
   velocity                ;; a vector with the step of agent
   gamma                   ;; panic factor
   group-id                ;; ID of the group this person belongs to
-  gsize              ;; size of it's group needed for ploting
+  gsize                   ;; size of it's group needed for ploting
   group-color             ;; color assigned to the group
   ease-dist               ;; distance to the exit in which the panic is not increasing
   avoid_dist              ;;group
@@ -60,7 +60,7 @@ people-own [
   alignment-factor        ;;
   obstacle-factor         ;;
   current-node-id         ;;
-  goal-vector
+  goal-pos
 ]
 
 ;; ========== SETUP ==========
@@ -95,50 +95,68 @@ end
 
 ;; ========== MAIN LOOP ==========
 to go
-  ask n-of count people people [
-    let v-goal goal-component
-    let v-new v-plus MOVE v-goal goal-factor
-    update-panic
+  ask people [
+  let v-goal (goal-component)
+  let v-new  (v-plus MOVE v-goal goal-factor)
 
-    if gamma >= 0.5 [ ;; If the agent’s panic level is greater than or equal to 0.5:
-      set v-new (list 0 0) ;Reset intended velocity to zero
-      set separation-factor 0 ;Set cohesion, alignment, and obstacle weights to zero -to show herding behavior
-      set alignment-factor 0
-      
-      ;Update the agent’s panic value to the average of its neighbors’ panic levels.
-      ;set gamma ;;;;;;; AND Here function to get mean panic from the gruop/ local agents
-      set v-new MOVE
-    ]
-    ;; This is for mixing panic between trying to move toward the exit vs. just continuing in the same direction
-    set v-new v-scale v-new (1 - gamma)
-    set v-new v-plus v-new velocity gamma
-    set velocity limit-speed v-new vmax
+  update-panic
 
-    let pnext v-scale-add (list xcor ycor) velocity time-step
-    let nx (item 0 pnext)
-    let ny (item 1 pnext)
-
-    ifelse safe-spot? nx ny r [
-      setxy nx ny
-    ] [
-      ;; blocked: try smaller step in original direction
-      let damped v-scale velocity 0.5
-      let pshort v-scale-add (list xcor ycor) damped (time-step * 0.5)
-      let sx (item 0 pshort)
-      let sy (item 1 pshort)
-      ifelse safe-spot? sx sy r [
-        setxy sx sy
-      ] [
-        ;; still blocked: try a small random lateral sidestep
-        let angle random-float 360
-        let step v-scale (unit (list (cos angle) (sin angle))) (time-step * 0.5)
-        let rx (item 0 step) + xcor
-        let ry (item 1 step) + ycor
-        if safe-spot? rx ry r [ setxy rx ry ]
-      ]
-    ]
-
+  ;; panic behavior
+  if gamma >= 0.5 [
+    set v-new (list 0 0)
+    set separation-factor 0
+    set alignment-factor  0
+    ;; mix/borrow panic from nearby agents (choose a radius you like)
+    set gamma (mean-gamma-neighbors 3)
+    set v-new MOVE
   ]
+
+  ;; blend target motion (1-gamma) with inertia (gamma)
+  set v-new   (v-scale v-new (1 - gamma))
+  set v-new   (v-plus  v-new velocity gamma)
+  set velocity (limit-speed v-new vmax)
+
+  ;; propose next position
+  let pnext (v-scale-add (list xcor ycor) velocity time-step)
+  let nx    (item 0 pnext)
+  let ny    (item 1 pnext)
+
+  ;; evaluate move
+  let status (eval-move nx ny r)
+
+  if status = "exit" [
+    set people-exited people-exited + 1
+    die
+  ]
+  if status = "safe" [
+    setxy nx ny
+  ]
+
+  ;; only try alternatives for collisions (not boundary)
+  if status = "blocked-collision" [
+    ;; half step along current direction
+    let damped  (v-scale velocity 0.5)
+    let pshort  (v-scale-add (list xcor ycor) damped (time-step * 0.5))
+    let sx      (item 0 pshort)
+    let sy      (item 1 pshort)
+    if (eval-move sx sy r) = "safe" [ setxy sx sy ]
+    if (eval-move sx sy r) != "safe" [
+      ;; lateral sidestep
+      let angle random-float 360
+      let step  (v-scale (unit (list (cos angle) (sin angle))) (time-step * 0.5))
+      let rx    (xcor + item 0 step)
+      let ry    (ycor + item 1 step)
+      if (eval-move rx ry r) = "safe" [ setxy rx ry ]
+    ]
+  ]
+
+  ;; velocity arrows (uses the helper we set up earlier)
+  if show-vectors? [
+      draw-vel-arrow-turtle (item 0 velocity) (item 1 velocity) 2 group-color
+    ]
+]
+
+
 
   ask people with [ any? patches with [ is-exit? ] in-radius (r * 1.5) ] [
     set people-exited people-exited + 1
@@ -147,23 +165,50 @@ to go
   
   ;; stop if reached maximum simulation time
   if ticks >= 5000 [ ;; decide how many ticks we want
-    set evacuation-time ticks * time-step
     stop
   ]
 
-  if count people with [ any? patches with [ is-exit? and distance myself < (2 / meters-per-patch) ] ] = count people [
-    set evacuation-time ticks * time-step
+  if count people = 0 [
     stop
   ]
+  
+  
 
   tick
   set evacuation-time ticks * time-step
 end
 ]]></code>
   <widgets>
-    <view x="384" wrappingAllowedX="false" y="17" frameRate="30.0" minPycor="-120" height="497" showTickCounter="true" patchSize="2.0" fontSize="10" wrappingAllowedY="false" width="537" tickCounterLabel="ticks" maxPycor="120" updateMode="0" maxPxcor="130" minPxcor="-130"></view>
+    <view x="384" wrappingAllowedX="false" y="17" frameRate="30.0" minPycor="-120" height="497" showTickCounter="true" patchSize="2.0" fontSize="10" wrappingAllowedY="false" width="537" tickCounterLabel="ticks" maxPycor="120" updateMode="1" maxPxcor="130" minPxcor="-130"></view>
     <monitor x="955" precision="1" y="22" height="60" fontSize="11" width="100">people-exited</monitor>
-    <plot x="953" autoPlotX="true" yMax="10.0" autoPlotY="true" yAxis="Pepole" y="93" xMin="0.0" height="408" legend="true" xMax="10.0" yMin="0.0" width="439" xAxis="time" display="Pepole who exited">
+    <chooser x="12" y="8" height="60" variable="layout-choice" current="3" width="162" display="layout-choice">
+      <choice type="string" value="center-strip"></choice>
+      <choice type="string" value="cinema"></choice>
+      <choice type="string" value="none"></choice>
+      <choice type="string" value="layout-a"></choice>
+      <choice type="string" value="layout-b"></choice>
+      <choice type="string" value="layout-c"></choice>
+      <choice type="string" value="layout-d"></choice>
+      <choice type="string" value="layout-e"></choice>
+      <choice type="string" value="layout-f"></choice>
+    </chooser>
+    <monitor x="185" precision="0" y="9" height="79" fontSize="30" width="162" display="Total number of people">In_groups_of_1 + In_groups_of_2 + In_groups_of_3 + In_groups_of_4 + In_groups_of_5</monitor>
+    <slider x="16" step="1" y="95" max="100" width="208" display="In_groups_of_1" height="60" min="0" direction="Horizontal" default="0.0" variable="In_groups_of_1" units="people"></slider>
+    <monitor x="232" precision="0" y="299" height="60" fontSize="11" width="100" display="Groups of 4">In_groups_of_4 / 4</monitor>
+    <monitor x="232" precision="0" y="231" height="60" fontSize="11" width="100" display="Groups of 3">In_groups_of_3 / 3</monitor>
+    <monitor x="232" precision="0" y="163" height="60" fontSize="11" width="100" display="Groups of 2">In_groups_of_2 / 2</monitor>
+    <slider x="16" step="3" y="231" max="100" width="208" display="In_groups_of_3" height="60" min="0" direction="Horizontal" default="0.0" variable="In_groups_of_3" units="people"></slider>
+    <slider x="16" step="4" y="299" max="100" width="208" display="In_groups_of_4" height="60" min="0" direction="Horizontal" default="0.0" variable="In_groups_of_4" units="people"></slider>
+    <slider x="16" step="2" y="163" max="100" width="208" display="In_groups_of_2" height="60" min="0" direction="Horizontal" default="60.0" variable="In_groups_of_2" units="people"></slider>
+    <slider x="16" step="5" y="364" max="100" width="208" display="In_groups_of_5" height="60" min="0" direction="Horizontal" default="0.0" variable="In_groups_of_5" units="people"></slider>
+    <monitor x="232" precision="0" y="95" height="60" fontSize="11" width="100" display="Groups of 1">In_groups_of_1 / 1</monitor>
+    <button x="16" y="486" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="92">Setup</button>
+    <button x="116" y="486" height="40" disableUntilTicks="false" forever="true" kind="Observer" width="92">go</button>
+    <monitor x="232" precision="17" y="364" height="60" fontSize="11" width="100" display="Groups of 5">In_groups_of_5 / 5</monitor>
+    <monitor x="1069" precision="3" y="22" height="60" fontSize="11" width="110">evacuation-time</monitor>
+    <monitor x="1187" precision="17" y="21" height="60" fontSize="11" width="100">sum [gamma] of people / N</monitor>
+    <switch x="17" y="433" height="40" on="true" variable="show-vectors?" width="113" display="show-vectors?"></switch>
+    <plot x="953" autoPlotX="true" yMax="10.0" autoPlotY="true" yAxis="Pepole" y="90" xMin="0.0" height="250" legend="true" xMax="10.0" yMin="0.0" width="443" xAxis="time" display="Pepole who exited">
       <setup></setup>
       <update></update>
       <pen interval="1.0" mode="0" display="default" color="-16777216" legend="true">
@@ -190,39 +235,15 @@ end
         <setup></setup>
         <update>plot In_groups_of_5 - count people with [gsize = 5]</update>
       </pen>
-      <pen interval="5.0" mode="0" display="pen-6" color="-2064490" legend="false">
+    </plot>
+    <plot x="952" autoPlotX="true" yMax="1.0" autoPlotY="true" yAxis="panic level" y="350" xMin="0.0" height="175" legend="false" xMax="10.0" yMin="0.0" width="230" xAxis="time" display="Panic">
+      <setup></setup>
+      <update></update>
+      <pen interval="1.0" mode="0" display="default" color="-16777216" legend="true">
         <setup></setup>
-        <update>plot In_groups_of_5</update>
-      </pen>
-      <pen interval="1.0" mode="0" display="pen-7" color="-2674135" legend="true">
-        <setup></setup>
-        <update></update>
+        <update>plot sum [gamma] of people / N</update>
       </pen>
     </plot>
-    <chooser x="12" y="8" height="60" variable="layout-choice" current="1" width="162" display="layout-choice">
-      <choice type="string" value="center-strip"></choice>
-      <choice type="string" value="cinema"></choice>
-      <choice type="string" value="none"></choice>
-      <choice type="string" value="layout-a"></choice>
-      <choice type="string" value="layout-b"></choice>
-      <choice type="string" value="layout-c"></choice>
-      <choice type="string" value="layout-d"></choice>
-      <choice type="string" value="layout-e"></choice>
-      <choice type="string" value="layout-f"></choice>
-    </chooser>
-    <monitor x="185" precision="0" y="9" height="79" fontSize="30" width="162" display="Total number of people">In_groups_of_1 + In_groups_of_2 + In_groups_of_3 + In_groups_of_4 + In_groups_of_5</monitor>
-    <slider x="16" step="1" y="95" max="100" width="208" display="In_groups_of_1" height="60" min="0" direction="Horizontal" default="16.0" variable="In_groups_of_1" units="people"></slider>
-    <monitor x="232" precision="0" y="299" height="60" fontSize="11" width="100" display="Groups of 4">In_groups_of_4 / 4</monitor>
-    <monitor x="232" precision="0" y="231" height="60" fontSize="11" width="100" display="Groups of 3">In_groups_of_3 / 3</monitor>
-    <monitor x="232" precision="0" y="163" height="60" fontSize="11" width="100" display="Groups of 2">In_groups_of_2 / 2</monitor>
-    <slider x="16" step="3" y="231" max="100" width="208" display="In_groups_of_3" height="60" min="0" direction="Horizontal" default="12.0" variable="In_groups_of_3" units="people"></slider>
-    <slider x="16" step="4" y="299" max="100" width="208" display="In_groups_of_4" height="60" min="0" direction="Horizontal" default="16.0" variable="In_groups_of_4" units="people"></slider>
-    <slider x="16" step="2" y="163" max="100" width="208" display="In_groups_of_2" height="60" min="0" direction="Horizontal" default="14.0" variable="In_groups_of_2" units="people"></slider>
-    <slider x="16" step="5" y="364" max="100" width="208" display="In_groups_of_5" height="60" min="0" direction="Horizontal" default="15.0" variable="In_groups_of_5" units="people"></slider>
-    <monitor x="232" precision="0" y="95" height="60" fontSize="11" width="100" display="Groups of 1">In_groups_of_1 / 1</monitor>
-    <button x="16" y="486" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="92">Setup</button>
-    <button x="116" y="486" height="40" disableUntilTicks="false" forever="true" kind="Observer" width="92">go</button>
-    <monitor x="232" precision="17" y="364" height="60" fontSize="11" width="100" display="Groups of 5">In_groups_of_5 / 5</monitor>
   </widgets>
   <info>## WHAT IS IT?
 

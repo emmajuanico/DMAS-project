@@ -23,7 +23,7 @@ to-report rule-for-pos [x y]
   ]
   
   if kind = "next-node" [
-    report ifelse-value (length rule = 2)
+    report ifelse-value (length rule = 1)
       [ vec-next-node-certain   x y rule ]
       [ vec-next-node-uncertain x y rule ]
   ]
@@ -32,21 +32,27 @@ to-report rule-for-pos [x y]
   report (list 0 0)
 end
 
+
 ;; ========== NEXT NODE rules ==========
 
 ;; nodeRule (NEXT NODE certain): rule = target node-id (number or string)
 ;; Returns a unit vector [dx dy] from (x,y) toward the closest patch with node-id = rule
-to-report vec-next-node-certain [x y rule]
-  let targets patches with [node-id = rule]
-  if not any? targets [ report list 0 0 ]
+to-report vec-next-node-certain [ x y rule ]
+  ;; rule may be a list or a bare value
+  let rule-id ifelse-value is-list? rule [ item 0 rule ] [ rule ]
 
-  ;; pick nearest by squared distance (faster than distance)
-  let p min-one-of targets [ (pxcor - x) * (pxcor - x) + (pycor - y) * (pycor - y) ]
+  ;; (optional) normalize type to string if your patch node-ids are strings
+  ;; if not is-string? rule-id [ set rule-id (word rule-id) ]
 
-  ;; vector from agent -> target, then normalize
-  let vec v-sub (list [pxcor] of p [pycor] of p) (list x y)
-  report unit vec
+  let targets patches with [ node-id = rule-id ]
+  if not any? targets [ report (list 0 0) ]  ;; no targets → zero vector
+
+  ;; closest patch to (x,y)
+  let p min-one-of targets [ distancexy x y ]
+  
+  report p
 end
+
 
 ;; nodeRule (NEXT NODE uncertain):
 ;; rule examples:
@@ -178,124 +184,7 @@ to-report vec-dir-uncertain [x y rule]
   report (list 0 0)
 end
 
-
-;; ==============================================
-;; Nodes for layout
-;; ==============================================
-
-;; --- ONE BIG NODE for layout-a ---
-to build-node-layout-a
-  ;; doors-layout-a -> [(x y visibility id)], take the first (and only) door
-  let d first doors-layout-a
-  let gx round item 0 d
-  let gy round item 1 d
-
-  ask patches [
-    set node-id 1
-    set node-kind "next-node"
-    set node-rule ("door-1")   ;; certain GOAL: [gx gy]
-  ]
-end
-
-;; --- ONE BIG NODE for layout-cinema ---
-to build-nodes-cinema
-  ;; ===== match your layout-cinema parameters =====
-  let seat-size-m         1
-  let seat-spacing-m      0
-  let row-spacing-m       0.7
-  let side-block-seats    5
-  let middle-block-seats  10
-  let num-rows            12
-
-  ;; ----- convert to patch units -----
-  let seat-size     (seat-size-m     / meters-per-patch)
-  let seat-spacing  (seat-spacing-m  / meters-per-patch)
-  let row-spacing   (row-spacing-m   / meters-per-patch)
-
-  let seat-size-p   round seat-size
-  let seat-space-p  round seat-spacing
-  let step          (seat-size-p + seat-space-p)
-
-  let left-wall     min-pxcor
-  let right-wall    max-pxcor
-
-  let bottom        (min-pycor + 5)
-  let top           bottom + num-rows * (seat-size + row-spacing)
-
-  ;; ----- horizontal geometry per row (same math as layout-cinema) -----
-  let left_center_offset  round (seat-size-p / 2)
-  let left_start_x        (left-wall + left_center_offset)
-  let last_left_center    (left_start_x + (side-block-seats - 1) * step)
-
-  let right_center_offset round (seat-size-p / 2)
-  let right_start_center  (right-wall - right_center_offset)
-  let first_right_center  (right_start_center - (side-block-seats - 1) * step)
-
-  let middle_width        ((middle-block-seats - 1) * step)
-  let available_space     (first_right_center - last_left_center - middle_width)
-  let aisle_width         max list 2 floor (available_space / 2)
-
-  let middle_first_candidate (last_left_center + aisle_width)
-  let middle_last_allowed    (first_right_center - aisle_width)
-  let compressed? (middle_last_allowed - middle_first_candidate < middle_width)
-
-  let middle_step step
-  if compressed? [
-    if middle-block-seats > 1 [
-      let available (middle_last_allowed - middle_first_candidate)
-      set middle_step max list 1 floor (available / (middle-block-seats - 1))
-    ]
-  ]
-
-  ;; block extents (use half-seat to cover seat bodies)
-  let middle_xmin (middle_first_candidate - seat-size / 2)
-  let middle_xmax (middle_first_candidate + (middle-block-seats - 1) * middle_step + seat-size / 2)
-  let left_xmin   left-wall
-  let left_xmax   (last_left_center + seat-size / 2)
-  let right_xmin  (first_right_center - seat-size / 2)
-  let right_xmax  right-wall
-
-  let aisle1_xmin left_xmax
-  let aisle1_xmax middle_xmin
-  let aisle2_xmin middle_xmax
-  let aisle2_xmax right_xmin
-
-  ;; vertical extents of seating area
-  let ymin (bottom - seat-size / 2)
-  let ymax (top    + seat-size / 2)
-
-  ;; top/bottom bands near walls (for GO nodes that point to doors)
-  let bandH 3                              ;; height in patches; tweak if you like
-  let top_ymin  (ymax - bandH)
-  let bot_ymax  (ymin + bandH)
-
-  ;; doors (cinema has 4: TL, TR, BL, BR)
-  let ds doors-cinema
-  let topDoors    (list (item 0 ds) (item 1 ds))    ;; TL, TR
-  let bottomDoors (list (item 2 ds) (item 3 ds))    ;; BL, BR
-
-  ;; ========= paint nodes =========
-  ;; reset (not required if you called clear-all)
-  ask patches [ set node-id nobody set node-kind "" set node-rule [] ]
-
-  ;; A) TOP/BOTTOM GO bands (to nearest door on that wall)
-  set-rect-go-nearest round left_xmin   round right_xmax round top_ymin round ymax  1 topDoors
-  set-rect-go-nearest round left_xmin   round right_xmax round ymin     round bot_ymax 2 bottomDoors
-
-  ;; B) Interior DIRECTION nodes (you can tweak dx/dy below to match arrows)
-  ;;    Side seating blocks push toward center aisles
-  set-rect-direction  round left_xmin  round left_xmax   round bot_ymax round top_ymin  3  1 0    ;; → right
-  set-rect-direction  round right_xmin round right_xmax  round bot_ymax round top_ymin  4 -1 0    ;; ← left
-
-  ;;    Middle block: send flow upward (positive y) toward top band
-  set-rect-direction  round middle_xmin round middle_xmax round bot_ymax round top_ymin 5  0 1
-
-  ;;    Aisles: send flow upward as well (you can split upper/lower if desired)
-  set-rect-direction  round aisle1_xmin round aisle1_xmax round bot_ymax round top_ymin 6  0 1
-  set-rect-direction  round aisle2_xmin round aisle2_xmax round bot_ymax round top_ymin 7  0 1
-end
-
-
+;;==================================================================================================================
 
 
 to set-rect-direction [xmin xmax ymin ymax id dir-x dir-y]

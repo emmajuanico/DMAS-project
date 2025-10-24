@@ -6,9 +6,12 @@
 ;; ========== GOAL ==========
 to-report goal-component
   if current-node-id != [node-id] of patch-here [
-    set goal-vector rule-for-pos xcor ycor
+    set goal-pos rule-for-pos xcor ycor
+    set current-node-id [node-id] of patch-here
+    print (current-node-id)
+    print (word "goal-pos is " goal-pos)
   ]
-  report goal-vector
+  report  unit (vector-to [pxcor] of goal-pos [pycor] of goal-pos)
 end
 
 ;; ========== COHESION ==========
@@ -129,7 +132,7 @@ to-report MOVE
   let v-obs  obstacle-component
   
   ;;numeric weights
-  let group-weight      1.0
+  let group-weight      0.6
   let neighbour-weight  0.4
 
   ;; weighted sum of components
@@ -171,6 +174,31 @@ to-report safe-spot? [nx ny myr]
 
   ;; passed all checks
   report true
+end
+
+to-report eval-move [nx ny myr]
+  ;; --- immediate exit check (if currently on or very near an exit) ---
+  if any? patches in-radius (r + 1) with [is-exit?] [ report "exit" ]
+
+  let inside? (nx > min-pxcor and nx < max-pxcor and ny > min-pycor and ny < max-pycor)
+
+  ;; --- outside boundary ---
+  if not inside? [
+    ;; also check if near exit in the direction of movement
+    if any? patches in-radius (v-mag velocity) with [is-exit?] [
+      report "exit"
+    ]
+    report "blocked-boundary"
+  ]
+
+  ;; --- collision check with other agents ---
+  if any? other turtles with [ ((nx - xcor) ^ 2 + (ny - ycor) ^ 2) < ((myr + r) ^ 2) ] [
+    ;; but if there's an exit nearby, let them exit instead
+    if any? patches in-radius (r * 2) with [is-exit?] [ report "exit" ]
+    report "blocked-collision"
+  ]
+
+  report "safe"
 end
 
 
