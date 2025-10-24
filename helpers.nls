@@ -29,10 +29,20 @@ to draw-vel-arrow-turtle [vx vy scale col]
   ]
 end
 
+; ==========
+; Visuals
+; ==========
+
 to-report mean-gamma-neighbors [radius]
   let nb other people in-radius radius
   if any? nb [ report mean [gamma] of nb ]
   report gamma   ;; fallback: keep own gamma if no neighbors
+end
+
+to-report format-time
+  let minutes floor (evacuation-time / 60)
+  let seconds evacuation-time mod 60
+  report (word minutes ":" precision seconds 0)
 end
 
 ; ==========

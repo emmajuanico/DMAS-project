@@ -13,13 +13,15 @@ globals [
   next-gid          ;; running group id counter
   spawn-spots       ;; ordered list of obstacle-free patches
   spot-index        ;; where we are in spawn-spots
-  group-colors      ;; palette for groups
+  group-colors   ;; palette for groups
   meters-per-patch 
   time-step
   vis-door1
   vis-door2
   vis-door3
   vis-door4
+  h-avrg-gamma
+  
 ]
 
 breed [ people person ] ; our agents
@@ -48,33 +50,39 @@ people-own [
   gsize                   ;; size of it's group needed for ploting
   group-color             ;; color assigned to the group
   ease-dist               ;; distance to the exit in which the panic is not increasing
-  avoid_dist              ;;group
+  avoid_dist              ;; group
   da                      ;; neighbours
-  centroid_dist           ;; group
   dc                      ;; neighbours
-  alignment_dist          ;; group
-  dl                      ;;neighbours
+  dl                      ;; neighbours
   goal-factor             ;;
   cohesion-factor         ;;
   separation-factor       ;;
   alignment-factor        ;;
   obstacle-factor         ;;
+  
+  cohesion-factor-group   ;;
+  separation-factor-group ;;
+  alignment-factor-group  ;;
+  
   current-node-id         ;;
   goal-pos
 ]
 
 ;; ========== SETUP ==========
 to setup
+  print("new setup -------------------------------")
   clear-all
   set meters-per-patch 0.1
-  set time-step 0.1
+  set time-step 0.5
   resize-world -130 130 -120 120
   set-patch-size 2
   set speed-max 2.4 ;;;;;;;;;;;;;;;;;;;; this sould be cheked with literature ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   set panic-smooth 0.9 ;;;;;;;;;;;;;;;;; this sould be cheked with literature ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-  set vmax (speed-max / meters-per-patch)
+  set vmax (speed-max / meters-per-patch * time-step)
   set people-exited 0
   set threshold-force 750
+  set h-avrg-gamma 0
+  
   
   ask patches [
     set is-exit? false
@@ -154,9 +162,12 @@ to go
   if show-vectors? [
       draw-vel-arrow-turtle (item 0 velocity) (item 1 velocity) 2 group-color
     ]
+    
+  let avrg-gamma mean [gamma] of people
+  if h-avrg-gamma < avrg-gamma [
+      set h-avrg-gamma avrg-gamma
+    ]
 ]
-
-
 
   ask people with [ any? patches with [ is-exit? ] in-radius (r * 1.5) ] [
     set people-exited people-exited + 1
@@ -179,9 +190,13 @@ to go
 end
 ]]></code>
   <widgets>
-    <view x="384" wrappingAllowedX="false" y="17" frameRate="30.0" minPycor="-120" height="497" showTickCounter="true" patchSize="2.0" fontSize="10" wrappingAllowedY="false" width="537" tickCounterLabel="ticks" maxPycor="120" updateMode="1" maxPxcor="130" minPxcor="-130"></view>
-    <monitor x="955" precision="1" y="22" height="60" fontSize="11" width="100">people-exited</monitor>
-    <chooser x="12" y="8" height="60" variable="layout-choice" current="3" width="162" display="layout-choice">
+    <view x="352" wrappingAllowedX="false" y="94" frameRate="30.0" minPycor="-120" height="486" showTickCounter="true" patchSize="2.0" fontSize="10" wrappingAllowedY="false" width="526" tickCounterLabel="ticks" maxPycor="120" updateMode="1" maxPxcor="130" minPxcor="-130"></view>
+    <monitor x="351" precision="0" y="11" height="79" fontSize="30" width="162" display="Total number of people">In_groups_of_1 + In_groups_of_2 + In_groups_of_3 + In_groups_of_4 + In_groups_of_5</monitor>
+    <monitor x="527" precision="1" y="11" height="79" fontSize="30" width="115">people-exited</monitor>
+    <monitor x="656" precision="3" y="11" height="79" fontSize="30" width="115">format-time</monitor>
+    <monitor x="784" precision="3" y="11" height="79" fontSize="30" width="151" display="highest avreage panic">h-avrg-gamma</monitor>
+    <button x="149" y="591" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="92">Setup</button>
+    <chooser x="16" y="94" height="60" variable="layout-choice" current="5" width="325" display="layout-choice">
       <choice type="string" value="center-strip"></choice>
       <choice type="string" value="cinema"></choice>
       <choice type="string" value="none"></choice>
@@ -192,58 +207,63 @@ end
       <choice type="string" value="layout-e"></choice>
       <choice type="string" value="layout-f"></choice>
     </chooser>
-    <monitor x="185" precision="0" y="9" height="79" fontSize="30" width="162" display="Total number of people">In_groups_of_1 + In_groups_of_2 + In_groups_of_3 + In_groups_of_4 + In_groups_of_5</monitor>
-    <slider x="16" step="1" y="95" max="100" width="208" display="In_groups_of_1" height="60" min="0" direction="Horizontal" default="0.0" variable="In_groups_of_1" units="people"></slider>
-    <monitor x="232" precision="0" y="299" height="60" fontSize="11" width="100" display="Groups of 4">In_groups_of_4 / 4</monitor>
-    <monitor x="232" precision="0" y="231" height="60" fontSize="11" width="100" display="Groups of 3">In_groups_of_3 / 3</monitor>
-    <monitor x="232" precision="0" y="163" height="60" fontSize="11" width="100" display="Groups of 2">In_groups_of_2 / 2</monitor>
-    <slider x="16" step="3" y="231" max="100" width="208" display="In_groups_of_3" height="60" min="0" direction="Horizontal" default="0.0" variable="In_groups_of_3" units="people"></slider>
-    <slider x="16" step="4" y="299" max="100" width="208" display="In_groups_of_4" height="60" min="0" direction="Horizontal" default="0.0" variable="In_groups_of_4" units="people"></slider>
-    <slider x="16" step="2" y="163" max="100" width="208" display="In_groups_of_2" height="60" min="0" direction="Horizontal" default="60.0" variable="In_groups_of_2" units="people"></slider>
-    <slider x="16" step="5" y="364" max="100" width="208" display="In_groups_of_5" height="60" min="0" direction="Horizontal" default="0.0" variable="In_groups_of_5" units="people"></slider>
-    <monitor x="232" precision="0" y="95" height="60" fontSize="11" width="100" display="Groups of 1">In_groups_of_1 / 1</monitor>
-    <button x="16" y="486" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="92">Setup</button>
-    <button x="116" y="486" height="40" disableUntilTicks="false" forever="true" kind="Observer" width="92">go</button>
-    <monitor x="232" precision="17" y="364" height="60" fontSize="11" width="100" display="Groups of 5">In_groups_of_5 / 5</monitor>
-    <monitor x="1069" precision="3" y="22" height="60" fontSize="11" width="110">evacuation-time</monitor>
-    <monitor x="1187" precision="17" y="21" height="60" fontSize="11" width="100">sum [gamma] of people / N</monitor>
-    <switch x="17" y="433" height="40" on="true" variable="show-vectors?" width="113" display="show-vectors?"></switch>
-    <plot x="953" autoPlotX="true" yMax="10.0" autoPlotY="true" yAxis="Pepole" y="90" xMin="0.0" height="250" legend="true" xMax="10.0" yMin="0.0" width="443" xAxis="time" display="Pepole who exited">
+    <switch x="16" y="591" height="40" on="true" variable="show-vectors?" width="123" display="show-vectors?"></switch>
+    <chooser x="16" y="165" height="60" variable="Cohision-level" current="0" width="325" display="Cohision-level">
+      <choice type="string" value="High"></choice>
+      <choice type="string" value="Low"></choice>
+      <choice type="string" value="Single people"></choice>
+    </chooser>
+    <monitor x="241" precision="17" y="520" height="60" fontSize="11" width="100" display="Groups of 5">In_groups_of_5 / 5</monitor>
+    <slider x="16" step="5" y="520" max="100" width="217" display="In_groups_of_5" height="60" min="0" direction="Horizontal" default="40.0" variable="In_groups_of_5" units="people"></slider>
+    <slider x="16" step="4" y="449" max="100" width="217" display="In_groups_of_4" height="60" min="0" direction="Horizontal" default="0.0" variable="In_groups_of_4" units="people"></slider>
+    <monitor x="241" precision="0" y="449" height="60" fontSize="11" width="100" display="Groups of 4">In_groups_of_4 / 4</monitor>
+    <monitor x="241" precision="0" y="378" height="60" fontSize="11" width="100" display="Groups of 3">In_groups_of_3 / 3</monitor>
+    <slider x="16" step="3" y="378" max="100" width="217" display="In_groups_of_3" height="60" min="0" direction="Horizontal" default="0.0" variable="In_groups_of_3" units="people"></slider>
+    <monitor x="241" precision="0" y="307" height="60" fontSize="11" width="100" display="Groups of 2">In_groups_of_2 / 2</monitor>
+    <slider x="16" step="2" y="307" max="100" width="217" display="In_groups_of_2" height="60" min="0" direction="Horizontal" default="0.0" variable="In_groups_of_2" units="people"></slider>
+    <monitor x="241" precision="0" y="236" height="60" fontSize="11" width="100" display="Groups of 1">In_groups_of_1 / 1</monitor>
+    <slider x="16" step="1" y="236" max="100" width="217" display="In_groups_of_1" height="60" min="0" direction="Horizontal" default="0.0" variable="In_groups_of_1" units="people"></slider>
+    <plot x="947" autoPlotX="true" yMax="1.0" autoPlotY="false" yAxis="panic level" y="94" xMin="0.0" height="267" legend="true" xMax="10.0" yMin="0.0" width="449" xAxis="time" display="Panic">
+      <setup></setup>
+      <update></update>
+      <pen interval="1.0" mode="0" display="Panic" color="-5298144" legend="true">
+        <setup></setup>
+        <update>plot mean [gamma] of people</update>
+      </pen>
+      <pen interval="1.0" mode="0" display="Velocity" color="-14439633" legend="true">
+        <setup></setup>
+        <update>plot ( (meters-per-patch / time-step) * mean [ v-mag velocity ] of people )/ speed-max</update>
+      </pen>
+    </plot>
+    <plot x="947" autoPlotX="true" yMax="10.0" autoPlotY="true" yAxis="Pepole" y="377" xMin="0.0" height="255" legend="true" xMax="10.0" yMin="0.0" width="449" xAxis="time" display="Pepole who exited">
       <setup></setup>
       <update></update>
       <pen interval="1.0" mode="0" display="default" color="-16777216" legend="true">
         <setup></setup>
         <update>plot N - count people</update>
       </pen>
-      <pen interval="1.0" mode="0" display="pen-1" color="-2205872" legend="true">
+      <pen interval="1.0" mode="0" display="Guops of 1" color="-2064490" legend="true">
         <setup></setup>
         <update>plot In_groups_of_1 - count people with [gsize = 1]</update>
       </pen>
-      <pen interval="1.0" mode="0" display="pen-2" color="-8990512" legend="true">
+      <pen interval="1.0" mode="0" display="Groups of 2" color="-11221820" legend="true">
         <setup></setup>
         <update>plot In_groups_of_2 - count people with [gsize = 2]</update>
       </pen>
-      <pen interval="1.0" mode="0" display="pen-3" color="-14439633" legend="true">
+      <pen interval="1.0" mode="0" display="Groups of 3" color="-14439633" legend="true">
         <setup></setup>
         <update>plot In_groups_of_3 - count people with [gsize = 3]</update>
       </pen>
-      <pen interval="1.0" mode="0" display="pen-4" color="-6917194" legend="true">
+      <pen interval="1.0" mode="0" display="Groups of 4" color="-1184463" legend="true">
         <setup></setup>
         <update>plot In_groups_of_4 - count people with [gsize = 4]</update>
       </pen>
-      <pen interval="1.0" mode="0" display="pen-5" color="-2064490" legend="true">
+      <pen interval="1.0" mode="0" display="Groups of 5" color="-2674135" legend="true">
         <setup></setup>
         <update>plot In_groups_of_5 - count people with [gsize = 5]</update>
       </pen>
     </plot>
-    <plot x="952" autoPlotX="true" yMax="1.0" autoPlotY="true" yAxis="panic level" y="350" xMin="0.0" height="175" legend="false" xMax="10.0" yMin="0.0" width="230" xAxis="time" display="Panic">
-      <setup></setup>
-      <update></update>
-      <pen interval="1.0" mode="0" display="default" color="-16777216" legend="true">
-        <setup></setup>
-        <update>plot sum [gamma] of people / N</update>
-      </pen>
-    </plot>
+    <button x="249" y="591" height="40" disableUntilTicks="false" forever="true" kind="Observer" width="92" sizeVersion="0">go</button>
   </widgets>
   <info>## WHAT IS IT?
 

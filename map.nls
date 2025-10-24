@@ -60,7 +60,7 @@ end
 ;;   [1 0.7  2 0.3]         → weighted: 70% → node 1, 30% → node 2
 to-report vec-next-node-uncertain [x y rule]
   let ruleLen length rule
-  if ruleLen < 1 [ report list 0 0 ]
+  if ruleLen < 1 [ report (list 0 0)]
 
   ;; ===== determine if weighted or uniform =====
   let weighted? (ruleLen mod 2 = 0)   ;; even length ⇒ has weights (id,prob,id,prob,...)
@@ -93,11 +93,10 @@ to-report vec-next-node-uncertain [x y rule]
 
   ;; ===== now compute vector toward chosen node =====
   let targets patches with [node-id = chosen-id]
-  if not any? targets [ report list 0 0 ]
+  if not any? targets [ report (list 0 0) ]
 
   let p min-one-of targets [ (pxcor - x) * (pxcor - x) + (pycor - y) * (pycor - y) ]
-  let vec v-sub (list [pxcor] of p [pycor] of p) (list x y)
-  report unit vec
+  report p
 end
 
 

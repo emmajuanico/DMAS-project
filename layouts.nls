@@ -587,16 +587,30 @@ to initialize-agent-parameters [group-size myr gcol]
   
   ;; behavioral parameters
   set ease-dist      10 * r
-  set avoid_dist     2 * r + 2 ;;group
-  set da             10 * r + 2 ;;neigh
-  set dc             10 * r ;;neigh
-  set dl             10 * r ;;neigh
+  set da             2 * r + 2 ;;neigh
+  set dc             8 * r ;;neigh
+  set dl             4 * r ;;neigh
   
-  set goal-factor        6.5
+  set goal-factor        20
   set cohesion-factor    1.5
   set separation-factor  2.5
   set alignment-factor   1.5
   set obstacle-factor    3.5
+  
+    ; ------- Group -------------------
+  if Cohision-level = "High" [
+    set cohesion-factor-group    1.5 * 1.5
+    set separation-factor-group  2.5
+    set alignment-factor-group   1.5 * 1.5
+    set avoid_dist               r + 2 ;;group
+  ]
+  if Cohision-level = "Low" [
+    set cohesion-factor-group    1.5 * 1.25
+    set separation-factor-group  2.5 
+    set alignment-factor-group   1.5 * 1.25
+    set avoid_dist               1.25 * r + 2 ;;group
+  ]
+  ; ---------------------------------
   
   set group-id next-gid
   set group-color gcol
