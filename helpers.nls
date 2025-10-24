@@ -92,3 +92,23 @@ end
 to-report v-plus [acc vec w]
   report v-add acc (v-scale vec w)
 end
+
+to-report v-distance [v1 v2]
+  let d_x (item 0 v1 - item 0 v2)
+  let d_y (item 1 v1 - item 1 v2)
+  report sqrt (d_x ^ 2 + d_y ^ 2)
+end
+
+to-report normalize-vector [v]
+  let mag v-mag v
+  if mag = 0 [ report list 0 0 ]
+  report list ((item 0 v) / mag) ((item 1 v) / mag)
+end
+
+to-report dot-product [v1 v2]
+  report (item 0 v1) * (item 0 v2) + (item 1 v1) * (item 1 v2)
+end
+
+to-report O [z]
+  ifelse z >= 0 [ report z ] [ report 0 ]
+end
