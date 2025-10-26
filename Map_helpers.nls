@@ -108,3 +108,41 @@ to-report point-on-seg? [x y x1 y1 x2 y2]
   report (abs cross) <= 1e-6
 end
 
+;; choose a label from either:
+;;  - weighted list: [id1 p1 id2 p2 ...]
+;;  - uniform list:  [id1 id2 id3 ...]
+to-report choose-id-from-rule [rule]
+  if not is-list? rule [ report rule ]       ;; already a single id
+  let ruleLen length rule
+  if ruleLen = 0 [ report nobody ]
+
+  ;; weighted?  → if there is a number in position 1
+  let weighted? (ruleLen > 1 and is-number? item 1 rule)
+
+  if weighted? [
+    ;; sum weights
+    let total 0
+    let i 0
+    while [i < ruleLen] [
+      set total total + max list 0 (item (i + 1) rule)
+      set i i + 2
+    ]
+    if total = 0 [ report item 0 rule ]      ;; fallback
+
+    ;; roulette-wheel draw
+    let pick random-float total
+    let cum 0
+    set i 0
+    while [i < ruleLen] [
+      set cum cum + item (i + 1) rule
+      if pick < cum [ report item i rule ]
+      set i i + 2
+    ]
+    report item (ruleLen - 2) rule                  ;; safety fallback
+  ]
+
+  ;; uniform choice
+  report one-of rule
+end
+
+

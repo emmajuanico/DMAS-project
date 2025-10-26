@@ -187,3 +187,298 @@ to build-node-layout-e
     set node-rule ["exit-0" 0.5 "exit-1" 0.5]
   ]
 end
+
+;; ==============================
+;; LAYOUT AREAS (matching image)
+;; ==============================
+to build-node-layout-f
+  ;; Left-upper region (blue)
+  add-quad-node-m
+  -13 7    -13 12    -4 12    -4 7
+  "node-6" "next-node" (list "exit-0")
+  
+  ;; Left-lower region (blue)
+  add-quad-node-m
+  -4 7    -4 12    9.5 12    9.5 -5
+  "node-0" "next-node" (list "exit-0")
+  
+  ;; Left-lower region (blue)
+  add-quad-node-m
+  13 -4    9.5 -5    9.5 12    13 12
+  "node-0" "next-node" (list "exit-0")
+  
+  ;; Bottom strip (red)
+  add-quad-node-m
+  9.5 -5    13 -4    13 -12    9.5 -12
+  "node-1" "next-node" (list "node-0")
+  
+  ;; Middle-triangular region (orange)
+  add-quad-node-m
+  -4.5 -5    -4.5 7    -4 7    9.5 -5
+  "node-2" "next-node" ["node-4" 0.1 "node-5" 0.9]
+  
+  ;; Right-upper region (pink)
+  add-quad-node-m
+  -4.5 -10.5    -4.5 -4    9.5 -5    9.5 -10.5
+  "node-5" "next-node" ["node-1" 0.5 "node-3" 0.5]
+  
+  ;; Right-lower corner (sky)
+  add-quad-node-m
+  -4.5 -10.5    9.5 -10.5    9.5 -12    -4.5 -12
+  "node-3" "next-node" (list "noda-4")
+  
+  ;; Right-lower corner (green)
+  add-quad-node-m
+  -13 -12    -13 7    -4.5 7    -4.5 -12
+  "node-4" "next-node" (list "node-6")
+  
+end
+
+;; -------- LAYOUT F --------
+to build-node-layout-f-2
+  let doors doors-layout-f
+
+  ;; clear any previous node info
+  ask patches [
+    set node-id nobody
+    set node-kind ""
+    set node-rule []
+  ]
+
+  ;; === Extract the door information ===
+  let door first doors
+  let gx item 0 door
+  let gy item 1 door
+  let vis item 2 door
+  let id  item 3 door
+
+  ;; CERTAIN ZONES 
+  ;; Left-upper region (certain toward exit)
+  add-quad-node-m
+  -13 -12    -13 4    -4 4    -4 -10
+  "node-0" "next-node" (list "exit-0")
+  
+  ;; Right-upper region (certain toward exit)
+  add-quad-node-m
+  -4 7    -4 12    13 12    13 7
+  "node-1" "next-node" (list "exit-0")
+  
+  ;; Right-upper region (certain toward exit)
+  add-quad-node-m
+  9 -5    -4 7    13 7    13 -5
+  "node-1" "next-node" (list "exit-0")
+  
+  ;; UNCERTAIN ZONES 
+  
+  ;; Bottom corridor:
+  ;; → Probability: left or right (not up)
+  add-quad-node-m
+  -4 -12    -4 -5    13 -5     13 -12
+  "node-3" "next-node" (list "exit-0" 0.5 "exit-1" 0.5)
+  
+  ;; Center triangle / diagonal corridor:
+  ;; → Probability: up (to exit) or down (to bottom corridor)
+  add-quad-node-m
+  -4 6    -4 -5    9 -5    -2 4
+  "node-4" "next-node" (list "exit-0" 0.6 "exit-3" 0.4)
+  
+end
+
+
+to build-node-layout-cinema
+  ;; parameters from taken from layouts.nls -cinema
+  let seat-size-m          1
+  let seat-spacing-m       0
+  let side-block-seats     5
+  let middle-block-seats   10
+
+  let seat-size              (seat-size-m / meters-per-patch)
+  let seat-spacing           (seat-spacing-m / meters-per-patch)
+  let seat-size-patches      round seat-size
+  let seat-spacing-patches   round seat-spacing
+  let step                   (seat-size-patches + seat-spacing-patches)
+
+  ;; the boundaries
+  let left-wall  min-pxcor
+  let right-wall max-pxcor
+  let w (right-wall - left-wall + 1)
+  let h (max-pycor - min-pycor + 1)
+
+  ;; aisle geometry
+  let halfsize floor (seat-size-patches / 2)
+
+  ;; left block last center
+  let left_start_x (left-wall + halfsize)
+  let last_left_center (left_start_x + (side-block-seats - 1) * step)
+
+  ;; right block first center
+  let right_start_center (right-wall - halfsize)
+  let first_right_center (right_start_center - (side-block-seats - 1) * step)
+
+  let middle_width ((middle-block-seats - 1) * step)
+
+  ;; space available in each SIDE
+  let available_space (first_right_center - last_left_center - middle_width)
+
+  ;; per-aisle width (same rule you used; keep ≥ 2)
+  let aisle_width floor (available_space / 2)
+  if aisle_width < 2 [ set aisle_width 2 ]
+
+  ;; aisle centers between last_left and first_right with symmetric aisles
+  let left-aisle-x   (last_left_center + aisle_width / 2)
+  let right-aisle-x  (first_right_center - aisle_width / 2)
+  let aisle-width-patches aisle_width
+  let halfAisle floor (aisle-width-patches / 2)
+
+  ;; -----------------------------
+  ;; CHANGE #1: make aisles smaller
+  ;; -----------------------------
+  let aisle-shrink 10                         ;; tweak: 1..3
+  let halfAisleN max list 1 (halfAisle - aisle-shrink)
+
+  ;; corridors (top/bottom bands)
+  let corridor-height-patches max list 1 round (h * 0.12)
+  let yTopMin (max-pycor - corridor-height-patches + 1)
+  let yBotMax (min-pycor + corridor-height-patches - 1)
+
+
+  let extend-top     12
+  let extend-bottom  24                    ;; was 19
+  set yTopMin (yTopMin - extend-top)
+  set yBotMax (yBotMax + extend-bottom)
+  if yBotMax >= (yTopMin - 1) [ set yBotMax (yTopMin - 2) ]  ;; safety
+
+  ;; region edges for seat blocks (use narrower halfAisleN)
+  let left-edge   (left-aisle-x  - halfAisleN - 1)
+  let right-edge  (right-aisle-x + halfAisleN + 1)
+
+  ;; NEED TO CLEAR
+  ask patches [
+    set node-id   nobody
+    set node-kind ""
+    set node-rule []
+  ]
+
+  ;; 6: Top part cinema
+  ask patches with [pycor >= yTopMin] [
+    set node-id   "node-6"
+    set node-kind "next-node"
+    set node-rule ["exit-0" 0.5 "exit-1" 0.5]
+  ]
+
+  ;; 7: Bottom part cinema
+  ask patches with [pycor <= yBotMax] [
+    set node-id   "node-7"
+    set node-kind "next-node"
+    set node-rule ["exit-2" 0.5 "exit-3" 0.5]
+  ]
+
+  ;; 4: left vertical aisle (use halfAisleN)
+  ask patches with [
+    node-id = nobody and
+    pycor > yBotMax and pycor < yTopMin and
+    abs (pxcor - left-aisle-x) <= halfAisleN
+  ] [
+    set node-id   "node-4"
+    set node-kind "next-node"
+    set node-rule ["node-6" 0.5 "node-7" 0.5]
+  ]
+
+  ;; 5: right vertical aisle (use halfAisleN)
+  ask patches with [
+    node-id = nobody and
+    pycor > yBotMax and pycor < yTopMin and
+    abs (pxcor - right-aisle-x) <= halfAisleN
+  ] [
+    set node-id   "node-5"
+    set node-kind "next-node"
+    set node-rule ["node-6" 0.5 "node-7" 0.5]
+  ]
+
+  ;; 1: left seating block
+  ask patches with [
+    node-id = nobody and
+    pycor > yBotMax and pycor < yTopMin and
+    pxcor <= left-edge
+  ] [
+    set node-id   "node-1"
+    set node-kind "next-node"
+    set node-rule ["node-4"]
+  ]
+
+  ;; 3: right seating block
+  ask patches with [
+    node-id = nobody and
+    pycor > yBotMax and pycor < yTopMin and
+    pxcor >= right-edge
+  ] [
+    set node-id   "node-3"
+    set node-kind "next-node"
+    set node-rule ["node-5"]
+  ]
+
+  ;; 2: middle seating block 
+  ask patches with [
+    node-id = nobody and
+    pycor > yBotMax and pycor < yTopMin
+  ] [
+    set node-id   "node-2"
+    set node-kind "next-node"
+    set node-rule ["node-4" 0.5 "node-5" 0.5]
+  ]
+end
+
+
+to color-node-patches 
+  ask patches [ set pcolor black ]
+  ask patches with [node-id = "node-1"] [ set pcolor red + 1 ]
+  ask patches with [node-id = "node-2"] [ set pcolor orange + 1 ]
+  ask patches with [node-id = "node-3"] [ set pcolor sky + 2 ]
+  ask patches with [node-id = "node-4"] [ set pcolor green + 1 ]
+  ask patches with [node-id = "node-5"] [ set pcolor pink + 1 ]
+  ask patches with [node-id = "node-6"] [ set pcolor violet + 1 ]
+  ask patches with [node-id = "node-0"] [ set pcolor blue + 2 ]
+  ask patches with [node-id = nobody]   [ set pcolor brown + 2 ]
+end
+
+to debug-node-counts
+  foreach ["node-1" "node-2" "node-3" "node-4" "node-5" "node-6" "node-7"] [ nid ->
+    print (word nid ": " count patches with [node-id = nid])
+  ]
+  print (word "unassigned: " count patches with [node-id = nobody])
+end
+
+
+
+
+
+
+
+;; Draw grid lines every `spacing` patches
+;; `col` is a NetLogo color number/name, `thick` in patches
+to draw-grid [spacing col thick]
+  if spacing <= 0 [ stop ]
+  if thick <= 0 [ set thick 1 ]
+
+  let nx (floor ((max-pxcor - min-pxcor) / spacing) + 1)
+  let ny (floor ((max-pycor - min-pycor) / spacing) + 1)
+
+  ;; vertical lines
+  foreach (n-values nx [ i -> min-pxcor + i * spacing ]) [ x ->
+    ask patches with [ abs (pxcor - x) < thick / 2 ] [
+      set pcolor col
+    ]
+  ]
+
+  ;; horizontal lines
+  foreach (n-values ny [ j -> min-pycor + j * spacing ]) [ y ->
+    ask patches with [ abs (pycor - y) < thick / 2 ] [
+      set pcolor col
+    ]
+  ]
+end
+
+;; meters wrapper
+to draw-grid-m [spacing-m col thick]
+  draw-grid (spacing-m / meters-per-patch) col thick
+end

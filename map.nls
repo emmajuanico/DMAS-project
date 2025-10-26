@@ -23,9 +23,8 @@ to-report rule-for-pos [x y]
   ]
   
   if kind = "next-node" [
-    report ifelse-value (length rule = 1)
-      [ vec-next-node-certain   x y rule ]
-      [ vec-next-node-uncertain x y rule ]
+    report ifelse-value (length rule = 1) [rule]
+      [ choose-id-from-rule rule ]
   ]
 
   ;; default if kind unrecognized
@@ -50,7 +49,7 @@ to-report vec-next-node-certain [ x y rule ]
   ;; closest patch to (x,y)
   let p min-one-of targets [ distancexy x y ]
   
-  report p
+  report unit (vector-to [pxcor] of p [pycor] of p)
 end
 
 
@@ -59,42 +58,11 @@ end
 ;;   [1 2 3]                → uniform between node-ids 1,2,3
 ;;   [1 0.7  2 0.3]         → weighted: 70% → node 1, 30% → node 2
 to-report vec-next-node-uncertain [x y rule]
-  let ruleLen length rule
-  if ruleLen < 1 [ report (list 0 0)]
+  let chosen-id choose-id-from-rule rule          ;; "exit-0", etc.
+  if chosen-id = nobody [ report (list 0 0) ]
 
-  ;; ===== determine if weighted or uniform =====
-  let weighted? (ruleLen mod 2 = 0)   ;; even length ⇒ has weights (id,prob,id,prob,...)
-
-  let chosen-id nobody
-
-  ifelse weighted? [
-  ;; ---- weighted random draw ----
-    let total 0
-    let i 0
-    while [i < ruleLen] [
-      set total total + item (i + 1) rule
-      set i i + 2
-    ]
-    let pick random-float total
-    let cum 0
-    set i 0
-    while [i < ruleLen] [
-      set cum cum + item (i + 1) rule
-      if pick < cum [
-        set chosen-id item i rule
-        set i ruleLen
-      ]
-      set i i + 2
-    ]
-  ] [
-    ;; ---- uniform choice ----
-    set chosen-id one-of rule
-  ]
-
-  ;; ===== now compute vector toward chosen node =====
   let targets patches with [node-id = chosen-id]
   if not any? targets [ report (list 0 0) ]
-
   let p min-one-of targets [ (pxcor - x) * (pxcor - x) + (pycor - y) * (pycor - y) ]
   report p
 end

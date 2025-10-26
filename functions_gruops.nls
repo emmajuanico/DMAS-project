@@ -1,19 +1,20 @@
-; ==========
+; ==========================================================================================
 ; BEHAVIOR COMPONENTS
-; ==========
+; ==========================================================================================
 
 
 ;; ========== GOAL ==========
 to-report goal-component
   if current-node-id != [node-id] of patch-here [
-    set goal-pos rule-for-pos xcor ycor
+    set goal-pos       rule-for-pos xcor ycor
     set current-node-id [node-id] of patch-here
   ]
-  if is-list? goal-pos [
-    report goal-pos                        ;; or whatever “no goal” you want
-  ]
-  report unit (vector-to [pxcor] of goal-pos [pycor] of goal-pos)
+  report vec-next-node-certain xcor ycor goal-pos
 end
+
+
+
+
 
 ;; ========== COHESION ==========
 to-report group-cohesion-component
@@ -28,6 +29,7 @@ to-report group-cohesion-component
 end
 
 to-report neighbours-cohesion-component
+  ;let ns other people in-radius dc
   let ns other people with [group-id != [group-id] of myself] in-radius dc
   if any? ns [
     let cx mean [ xcor ] of ns
@@ -88,6 +90,7 @@ to-report groups-alignment-component
 end
 
 to-report neighbours-alignment-component
+  ;let ns other people in-radius dl
   let ns other people with [group-id != [group-id] of myself] in-radius dl
   if any? ns [
     let vx mean [ item 0 velocity ] of ns
@@ -112,9 +115,9 @@ to-report obstacle-component
   report list 0 0
 end
 
-; ==========
+; ==========================================================================================
 ; MOVE
-; ==========
+; ==========================================================================================
 
 to-report MOVE
   ;;;;;;;;;;;;;;; let v-goal goal-component
@@ -146,9 +149,9 @@ to-report MOVE
   report v-new
 end
 
-; ==========
+; ==========================================================================================
 ; OVERLAP & OBSTACLES
-; ==========
+; ==========================================================================================
 ;; True if a circle of radius `myr` at (nx, ny) is inside the world
 ;; and does not overlap any other turtle’s circle.
 to-report safe-spot? [nx ny myr]
@@ -200,9 +203,9 @@ end
 
 
 
-; ==========
+; ==========================================================================================
 ; PANIC UPDATE
-; ==========
+; ==========================================================================================
 to update-panic
   ;----------------------------------------------
   ;; δ1: distance to goal vs ease distance
@@ -277,4 +280,111 @@ to update-panic
   let zeta ((delta1 + 0.66 * (delta2-group + delta3-group + delta4-group) + 0.33 * (delta2-neigh + delta3-neigh + delta4-neigh)) / 4)
   set gamma ((1 - panic-smooth) * gamma + panic-smooth * zeta)
   set gamma max list 0 (min list 1 gamma)
+end
+
+
+
+; ==========================================================================================
+; Force Update
+; ==========================================================================================
+
+to force-update
+    ; Constants
+    let k 12000     ; normal repulsive force scaling
+    let Big_K 2000      ; tangential friction term scaling
+    let A 2000  ; (N) interaction strength
+    let B 0.08  ; (m) range of repulsive interactions
+    let F_threshold 1600 ; after this threshold, the agent becomes injured
+    
+    ; Get this agent’s own properties
+    let x_i list xcor ycor
+    let v_i velocity
+    let r_i r
+    let m_i weight
+    let c_i (2 * r * pi)  ;; agent's circumference
+
+    ; Compute total force: F_i = f_v + Σ_b f_i_b + Σ_j≠i f_i_j
+    let F_i list 0 0
+    
+    ; Restorative forced which steers the agent towards a desired velocity = m * a
+    let F_velocity v-scale v_i m_i   ;; v-scale (v-scale v_i (1 / time-step)) m_i                          (TODO)
+
+    ; Forces from boundaries (obstacles + walls) -> F_i_b
+    let F_boundary list 0 0
+
+    ask obstacles [
+      let x_b list xcor ycor
+      let d_ib v-distance x_i x_b
+      let n_ib normalize-vector (v-sub x_i x_b)
+      let t_ib list (- item 1 n_ib) (item 0 n_ib)
+      let overlap_ib (r_i - d_ib)
+      
+      let term1 v-scale n_ib (A * exp (overlap_ib / B))
+      let term2 v-scale n_ib (k * O overlap_ib)
+      let term3 v-scale t_ib (- Big_K * O overlap_ib * (dot-product v_i t_ib))
+      let f_i_b v-add (v-add term1 term2) term3
+      
+      set F_boundary v-add F_boundary f_i_b
+    ]
+
+    let world-left   (min-pxcor)
+    let world-right  (max-pxcor)
+    let world-bottom (min-pycor)
+    let world-top    (max-pycor)
+    
+    let xwalls (list (list world-left  ycor -1 0) (list world-right ycor 1 0))
+    let ywalls (list (list xcor world-bottom 0 -1) (list xcor world-top 0 1))
+    let allwalls sentence xwalls ywalls
+    
+    foreach allwalls [ wall ->
+      let wx item 0 wall
+      let wy item 1 wall
+      let nnx item 2 wall
+      let nny item 3 wall
+      let x_b list wx wy
+      let n_ib list nnx nny
+      let d_ib abs (dot-product (v-sub x_i x_b) n_ib)
+      let t_ib list (- nny) nnx
+      let overlap_ib (r_i - d_ib)
+      
+      let term1 v-scale n_ib (A * exp (overlap_ib / B))
+      let term2 v-scale n_ib (k * O overlap_ib)
+      let term3 v-scale t_ib (- Big_K * O overlap_ib * (dot-product v_i t_ib))
+      let f_i_b v-add (v-add term1 term2) term3
+      
+      set F_boundary v-add F_boundary f_i_b
+    ]
+    
+    set F_i v-add F_i F_boundary
+
+    ; forces from other agents
+    ask other people [
+      let x_j list xcor ycor
+      let v_j velocity
+      let r_j r
+      let d_ij v-distance x_i x_j
+      let n_ij normalize-vector (v-sub x_i x_j)
+      let t_ij list (- item 1 n_ij) (item 0 n_ij)
+      let r_sum (r_i + r_j)
+      let overlap_ij (r_sum - d_ij)
+      
+      ; f_i_j = A_i*exp[(r_i - d_ij)/B_i]*n_ij + k*O(r_i - d_ij)*n_ij + Big_K*O(r_i - d_ij)*((v_j - v_i) · t_ij)*t_ij
+      let term1 v-scale n_ij (A * exp (overlap_ij / B))
+      let term2 v-scale n_ij (k * O overlap_ij)
+      let term3 v-scale t_ij (Big_K * O overlap_ij * (dot-product (v-sub v_j v_i) t_ij))
+      let f_i_j v-add (v-add term1 term2) term3
+      
+      set F_i v-add F_i f_i_j
+    ]
+    
+    ; injury check based on total force magnitude
+    let F_magnitude v-mag F_i
+    
+    if (not injured?) and ((F_magnitude / c_i) > 1600) [
+      set color grey
+      set injured? true
+      set velocity list 0 0
+      set injured-people injured-people + 1
+    ]
+    
 end

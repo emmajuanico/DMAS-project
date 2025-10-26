@@ -1,0 +1,19 @@
+"BehaviorSpace results (NetLogo 7.0.0)","Spreadsheet version 2.0"
+"DMAS_code_group.nlogox"
+"experiment"
+"10/25/2025 18:20:30:826 +0200"
+"min-pxcor","max-pxcor","min-pycor","max-pycor"
+"-130","130","-120","120"
+"[run number]","1","1","1","1","1","1","1","2","2","2","2","2","2","2","3","3","3","3","3","3","3","4","4","4","4","4","4","4","5","5","5","5","5","5","5","6","6","6","6","6","6","6","7","7","7","7","7","7","7","8","8","8","8","8","8","8","9","9","9","9","9","9","9","10","10","10","10","10","10","10"
+"In_groups_of_2","0",,,,,,,"0",,,,,,,"0",,,,,,,"0",,,,,,,"0",,,,,,,"0",,,,,,,"0",,,,,,,"0",,,,,,,"0",,,,,,,"0",,,,,,
+"In_groups_of_1","120",,,,,,,"120",,,,,,,"120",,,,,,,"120",,,,,,,"120",,,,,,,"120",,,,,,,"120",,,,,,,"120",,,,,,,"120",,,,,,,"120",,,,,,
+"In_groups_of_5","0",,,,,,,"0",,,,,,,"0",,,,,,,"0",,,,,,,"0",,,,,,,"0",,,,,,,"0",,,,,,,"0",,,,,,,"0",,,,,,,"0",,,,,,
+"In_groups_of_4","0",,,,,,,"0",,,,,,,"0",,,,,,,"0",,,,,,,"0",,,,,,,"0",,,,,,,"0",,,,,,,"0",,,,,,,"0",,,,,,,"0",,,,,,
+"Cohision-level","Single people",,,,,,,"Single people",,,,,,,"Single people",,,,,,,"Single people",,,,,,,"Single people",,,,,,,"Single people",,,,,,,"Single people",,,,,,,"Single people",,,,,,,"Single people",,,,,,,"Single people",,,,,,
+"In_groups_of_3","0",,,,,,,"0",,,,,,,"0",,,,,,,"0",,,,,,,"0",,,,,,,"0",,,,,,,"0",,,,,,,"0",,,,,,,"0",,,,,,,"0",,,,,,
+"show-vectors?","true",,,,,,,"true",,,,,,,"true",,,,,,,"true",,,,,,,"true",,,,,,,"true",,,,,,,"true",,,,,,,"true",,,,,,,"true",,,,,,,"true",,,,,,
+"layout-choice","layout-a",,,,,,,"layout-a",,,,,,,"layout-a",,,,,,,"layout-a",,,,,,,"layout-a",,,,,,,"layout-a",,,,,,,"layout-a",,,,,,,"layout-a",,,,,,,"layout-a",,,,,,,"layout-a",,,,,,
+"[total steps]","129","129","129","129","129","129","129","121","121","121","121","121","121","121","119","119","119","119","119","119","119","122","122","122","122","122","122","122","116","116","116","116","116","116","116","123","123","123","123","123","123","123","127","127","127","127","127","127","127","118","118","118","118","118","118","118","104","104","104","104","104","104","104","114","114","114","114","114","114","114"
+
+"[final value]","[step]","people-exited","format-time","injured-people","avrg-gamma","avrg-velocity","stopted-why?","[step]","people-exited","format-time","injured-people","avrg-gamma","avrg-velocity","stopted-why?","[step]","people-exited","format-time","injured-people","avrg-gamma","avrg-velocity","stopted-why?","[step]","people-exited","format-time","injured-people","avrg-gamma","avrg-velocity","stopted-why?","[step]","people-exited","format-time","injured-people","avrg-gamma","avrg-velocity","stopted-why?","[step]","people-exited","format-time","injured-people","avrg-gamma","avrg-velocity","stopted-why?","[step]","people-exited","format-time","injured-people","avrg-gamma","avrg-velocity","stopted-why?","[step]","people-exited","format-time","injured-people","avrg-gamma","avrg-velocity","stopted-why?","[step]","people-exited","format-time","injured-people","avrg-gamma","avrg-velocity","stopted-why?","[step]","people-exited","format-time","injured-people","avrg-gamma","avrg-velocity","stopted-why?"
+,"129","120","1:5","0","7.733934199142392E-8","11.999999999999998","1","121","120","1:1","0","2.258225907066519E-9","11.999999999999998","1","119","120","0:60","0","6.24272942513733E-10","12","1","122","119","1:1","1","0.007322202825037789","7.999999999999999","2","116","120","0:58","0","5.806554487543547E-8","11.999999999999998","1","123","120","1:2","0","3.783558708313365E-9","11.999999999999998","1","127","119","1:4","1","0.1162390650743792","5.999999999999999","2","118","120","0:59","0","6.747214339219948E-9","11.999999999999998","1","104","120","0:52","0","5.640371473720254E-8","11.999999999999998","1","114","120","0:57","0","2.731052959089024E-7","11.999999999999996","1"

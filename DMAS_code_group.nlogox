@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <model version="NetLogo 7.0.0" snapToGrid="false">
-  <code><![CDATA[__includes [ "helpers.nls" "functions_gruops.nls" "grouping.nls" "layouts.nls" "map.nls" "map_helpers.nls" "node-layouts.nls"]
+  <code><![CDATA[__includes [ "helpers.nls" "functions_gruops.nls" "grouping.nls" "layouts.nls" "map.nls" "map_helpers.nls" "node-layouts.nls" "force.nls"]
 
 globals [
   panic-smooth
@@ -21,8 +21,10 @@ globals [
   vis-door3
   vis-door4
   h-avrg-gamma
-  group-colors      ;; palette for groups
   injured-people    ;; counter for people who are injured
+  stopted-why?
+  avrg-gamma
+  avrg-velocity
 ]
 
 breed [ people person ] ; our agents
@@ -67,7 +69,10 @@ people-own [
   
   current-node-id         ;;
   goal-pos
+  group-rule
+  my-rule
   injured?                ;; true if this person is injured
+  
 ]
 
 ;; ========== SETUP ==========
@@ -107,174 +112,74 @@ end
 
 ;; ========== MAIN LOOP ==========
 to go
-  ask people [
-  let v-goal (goal-component)
-  let v-new  (v-plus MOVE v-goal goal-factor)
+  ask people with [not injured?] [
+    let v-goal (goal-component)
+    let v-new  (v-plus MOVE v-goal goal-factor)
 
-  update-panic
-
-  ;; panic behavior
-  if gamma >= 0.5 [
-    set v-new (list 0 0)
-    set separation-factor 0
-    set alignment-factor  0
-    ;; mix/borrow panic from nearby agents (choose a radius you like)
-    set gamma (mean-gamma-neighbors 3)
-    set v-new MOVE
-  ]
-
-  ;; blend target motion (1-gamma) with inertia (gamma)
-  set v-new   (v-scale v-new (1 - gamma))
-  set v-new   (v-plus  v-new velocity gamma)
-  set velocity (limit-speed v-new vmax)
-
-  ;; propose next position
-  let pnext (v-scale-add (list xcor ycor) velocity time-step)
-  let nx    (item 0 pnext)
-  let ny    (item 1 pnext)
-
-  ;; evaluate move
-  let status (eval-move nx ny r)
-
-  if status = "exit" [
-    set people-exited people-exited + 1
-    die
-  ]
-  if status = "safe" [
-    setxy nx ny
-  ]
-
-  ;; only try alternatives for collisions (not boundary)
-  if status = "blocked-collision" [
-    ;; half step along current direction
-    let damped  (v-scale velocity 0.5)
-    let pshort  (v-scale-add (list xcor ycor) damped (time-step * 0.5))
-    let sx      (item 0 pshort)
-    let sy      (item 1 pshort)
-    if (eval-move sx sy r) = "safe" [ setxy sx sy ]
-    if (eval-move sx sy r) != "safe" [
-      ;; lateral sidestep
-      let angle random-float 360
-      let step  (v-scale (unit (list (cos angle) (sin angle))) (time-step * 0.5))
-      let rx    (xcor + item 0 step)
-      let ry    (ycor + item 1 step)
-      if (eval-move rx ry r) = "safe" [ setxy rx ry ]
+    update-panic
+    
+    ;; panic behavior
+    if gamma >= 0.5 [
+      set v-new (list 0 0)
+      set separation-factor 0
+      set alignment-factor  0
+      ;; mix/borrow panic from nearby agents (choose a radius you like)
+      set gamma (mean-gamma-neighbors 3)
+      set v-new MOVE
     ]
-  ]
+    
+    ;; blend target motion (1-gamma) with inertia (gamma)
+    set v-new   (v-scale v-new (1 - gamma))
+    set v-new   (v-plus  v-new velocity gamma)
+    set velocity (limit-speed v-new vmax)
+    
+    ;; propose next position
+    let pnext (v-scale-add (list xcor ycor) velocity time-step)
+    let nx    (item 0 pnext)
+    let ny    (item 1 pnext)
+    
+    ;; evaluate move
+    let status (eval-move nx ny r)
+    
+    if status = "exit" [
+      set people-exited people-exited + 1
+      die
+    ]
+    if status = "safe" [
+      setxy nx ny
+    ]
 
-  ;; velocity arrows (uses the helper we set up earlier)
-  if show-vectors? [
+    ;; only try alternatives for collisions (not boundary)
+    if status = "blocked-collision" [
+      ;; half step along current direction
+      let damped  (v-scale velocity 0.5)
+      let pshort  (v-scale-add (list xcor ycor) damped (time-step * 0.5))
+      let sx      (item 0 pshort)
+      let sy      (item 1 pshort)
+      if (eval-move sx sy r) = "safe" [ setxy sx sy ]if (eval-move sx sy r) != "safe" [
+        ;; lateral sidestep
+        let angle random-float 360
+        let step  (v-scale (unit (list (cos angle) (sin angle))) (time-step * 0.5))
+        let rx    (xcor + item 0 step)
+        let ry    (ycor + item 1 step)
+        if (eval-move rx ry r) = "safe" [ setxy rx ry ]
+      ]
+    ]
+
+    Force-update
+  
+    ;; velocity arrows (uses the helper we set up earlier)
+    if show-vectors? [
       draw-vel-arrow-turtle (item 0 velocity) (item 1 velocity) 2 group-color
     ]
     
-  let avrg-gamma mean [gamma] of people
+  ]
+  set avrg-velocity mean [v-mag velocity] of people
+  set avrg-gamma mean [gamma] of people
   if h-avrg-gamma < avrg-gamma [
-      set h-avrg-gamma avrg-gamma
-   
-    ;; !!! Force dynamics
+    set h-avrg-gamma avrg-gamma
+  ]
     
-    ; Constants
-    let k 12000     ; normal repulsive force scaling
-    let Big_K 2000      ; tangential friction term scaling
-    let A 2000  ; (N) interaction strength
-    let B 0.08  ; (m) range of repulsive interactions
-    let F_threshold 1600 ; after this threshold, the agent becomes injured
-    
-    ; Get this agent’s own properties
-    let x_i list xcor ycor
-    let v_i velocity
-    let r_i r
-    let m_i weight
-    let c_i (2 * r * pi)  ;; agent's circumference
-
-    ; Compute total force: F_i = f_v + Σ_b f_i_b + Σ_j≠i f_i_j
-    let F_i list 0 0
-    
-    ; Restorative forced which steers the agent towards a desired velocity = m * a
-    let F_velocity v-scale v_i m_i   ;; v-scale (v-scale v_i (1 / time-step)) m_i                          (TODO)
-
-    ; Forces from boundaries (obstacles + walls) -> F_i_b
-    let F_boundary list 0 0
-
-    ask obstacles [
-      let x_b list xcor ycor
-      let d_ib v-distance x_i x_b
-      let n_ib normalize-vector (v-sub x_i x_b)
-      let t_ib list (- item 1 n_ib) (item 0 n_ib)
-      let overlap_ib (r_i - d_ib)
-      
-      let term1 v-scale n_ib (A * exp (overlap_ib / B))
-      let term2 v-scale n_ib (k * O overlap_ib)
-      let term3 v-scale t_ib (- Big_K * O overlap_ib * (dot-product v_i t_ib))
-      let f_i_b v-add (v-add term1 term2) term3
-      
-      set F_boundary v-add F_boundary f_i_b
-    ]
-
-    let world-left   (min-pxcor)
-    let world-right  (max-pxcor)
-    let world-bottom (min-pycor)
-    let world-top    (max-pycor)
-    
-    let xwalls (list (list world-left  ycor -1 0) (list world-right ycor 1 0))
-    let ywalls (list (list xcor world-bottom 0 -1) (list xcor world-top 0 1))
-    let allwalls sentence xwalls ywalls
-    
-    foreach allwalls [ wall ->
-      let wx item 0 wall
-      let wy item 1 wall
-      let nnx item 2 wall
-      let nny item 3 wall
-      let x_b list wx wy
-      let n_ib list nnx nny
-      let d_ib abs (dot-product (v-sub x_i x_b) n_ib)
-      let t_ib list (- nny) nnx
-      let overlap_ib (r_i - d_ib)
-      
-      let term1 v-scale n_ib (A * exp (overlap_ib / B))
-      let term2 v-scale n_ib (k * O overlap_ib)
-      let term3 v-scale t_ib (- Big_K * O overlap_ib * (dot-product v_i t_ib))
-      let f_i_b v-add (v-add term1 term2) term3
-      
-      set F_boundary v-add F_boundary f_i_b
-    ]
-    
-    set F_i v-add F_i F_boundary
-
-    ; forces from other agents
-    ask other people [
-      let x_j list xcor ycor
-      let v_j velocity
-      let r_j r
-      let d_ij v-distance x_i x_j
-      let n_ij normalize-vector (v-sub x_i x_j)
-      let t_ij list (- item 1 n_ij) (item 0 n_ij)
-      let r_sum (r_i + r_j)
-      let overlap_ij (r_sum - d_ij)
-      
-      ; f_i_j = A_i*exp[(r_i - d_ij)/B_i]*n_ij + k*O(r_i - d_ij)*n_ij + Big_K*O(r_i - d_ij)*((v_j - v_i) · t_ij)*t_ij
-      let term1 v-scale n_ij (A * exp (overlap_ij / B))
-      let term2 v-scale n_ij (k * O overlap_ij)
-      let term3 v-scale t_ij (Big_K * O overlap_ij * (dot-product (v-sub v_j v_i) t_ij))
-      let f_i_j v-add (v-add term1 term2) term3
-      
-      set F_i v-add F_i f_i_j
-    ]
-    
-    ; injury check based on total force magnitude
-    let F_magnitude v-mag F_i
-    
-    if (not injured?) and ((F_magnitude / c_i) > 1600) [
-      set injured? true
-      set velocity list 0 0
-      set color grey
-      set injured-people injured-people + 1
-    ]
-    
-    ;; !!! End of Force dynamics
-    ]
-]
-
   ask people with [ any? patches with [ is-exit? ] in-radius (r * 1.5) ] [
     set people-exited people-exited + 1
     die
@@ -282,39 +187,34 @@ to go
   
   ;; stop if reached maximum simulation time
   if ticks >= 5000 [ ;; decide how many ticks we want
+    set stopted-why? 0 ;"reached tikes limit"
     stop
   ]
-
+  
   if count people = 0 [
+    set stopted-why? 1 ;"every one exited"
     stop
   ]
-  
-  
-  ;; Stop if everyone is near some exit besides the injured people
-let active-people (count people - injured-people)
-let evacuated-people people-exited
 
-if evacuated-people >= active-people [
-  ;; everyone evacuated besides the injured people
-  set evacuation-time ticks * dt  ;; store final evacuation time
-  stop                            ;; stop the simulation
-]
+  let people-still-evacuating count people - injured-people
+  if people-still-evacuating = 0[
+    ;; everyone evacuated besides the injured people
+    set evacuation-time ticks * time-step  ;; store final evacuation time
+    set stopted-why? 2 ;"all pepole left are injured"
+    stop                            ;; stop the simulation
+  ]
 
   tick
   set evacuation-time ticks * time-step
 end
 ]]></code>
   <widgets>
-    <view x="352" wrappingAllowedX="false" y="94" frameRate="30.0" minPycor="-120" height="486" showTickCounter="true" patchSize="2.0" fontSize="10" wrappingAllowedY="false" width="526" tickCounterLabel="ticks" maxPycor="120" updateMode="1" maxPxcor="130" minPxcor="-130"></view>
+    <view x="352" wrappingAllowedX="false" y="94" frameRate="30.0" minPycor="-120" height="486" showTickCounter="true" patchSize="2.0" fontSize="10" wrappingAllowedY="false" width="526" tickCounterLabel="ticks" maxPycor="120" updateMode="0" maxPxcor="130" minPxcor="-130"></view>
     <monitor x="351" precision="0" y="11" height="79" fontSize="30" width="162" display="Total number of people">In_groups_of_1 + In_groups_of_2 + In_groups_of_3 + In_groups_of_4 + In_groups_of_5</monitor>
     <monitor x="527" precision="1" y="11" height="79" fontSize="30" width="115">people-exited</monitor>
-    <monitor x="656" precision="3" y="11" height="79" fontSize="30" width="115">format-time</monitor>
-    <monitor x="784" precision="3" y="11" height="79" fontSize="30" width="151" display="highest avreage panic">h-avrg-gamma</monitor>
-    <button x="149" y="591" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="92">Setup</button>
-    <chooser x="16" y="94" height="60" variable="layout-choice" current="5" width="325" display="layout-choice">
-      <choice type="string" value="center-strip"></choice>
+    <monitor x="656" precision="3" y="11" height="79" fontSize="30" width="115" display="Time (min:sec)">format-time</monitor>
+    <chooser x="16" y="94" height="60" variable="layout-choice" current="6" width="325" display="layout-choice">
       <choice type="string" value="cinema"></choice>
-      <choice type="string" value="none"></choice>
       <choice type="string" value="layout-a"></choice>
       <choice type="string" value="layout-b"></choice>
       <choice type="string" value="layout-c"></choice>
@@ -322,22 +222,22 @@ end
       <choice type="string" value="layout-e"></choice>
       <choice type="string" value="layout-f"></choice>
     </chooser>
-    <switch x="16" y="591" height="40" on="true" variable="show-vectors?" width="123" display="show-vectors?"></switch>
-    <chooser x="16" y="165" height="60" variable="Cohision-level" current="0" width="325" display="Cohision-level">
+    <switch x="16" y="591" height="40" on="false" variable="show-vectors?" width="123" display="show-vectors?"></switch>
+    <chooser x="16" y="165" height="60" variable="Cohision-level" current="2" width="325" display="Cohision-level">
       <choice type="string" value="High"></choice>
       <choice type="string" value="Low"></choice>
       <choice type="string" value="Single people"></choice>
     </chooser>
     <monitor x="241" precision="17" y="520" height="60" fontSize="11" width="100" display="Groups of 5">In_groups_of_5 / 5</monitor>
-    <slider x="16" step="5" y="520" max="100" width="217" display="In_groups_of_5" height="60" min="0" direction="Horizontal" default="40.0" variable="In_groups_of_5" units="people"></slider>
-    <slider x="16" step="4" y="449" max="100" width="217" display="In_groups_of_4" height="60" min="0" direction="Horizontal" default="0.0" variable="In_groups_of_4" units="people"></slider>
+    <slider x="16" step="5" y="520" max="120" width="217" display="In_groups_of_5" height="60" min="0" direction="Horizontal" default="120.0" variable="In_groups_of_5" units="people"></slider>
+    <slider x="16" step="4" y="449" max="120" width="217" display="In_groups_of_4" height="60" min="0" direction="Horizontal" default="0.0" variable="In_groups_of_4" units="people"></slider>
     <monitor x="241" precision="0" y="449" height="60" fontSize="11" width="100" display="Groups of 4">In_groups_of_4 / 4</monitor>
     <monitor x="241" precision="0" y="378" height="60" fontSize="11" width="100" display="Groups of 3">In_groups_of_3 / 3</monitor>
-    <slider x="16" step="3" y="378" max="100" width="217" display="In_groups_of_3" height="60" min="0" direction="Horizontal" default="0.0" variable="In_groups_of_3" units="people"></slider>
+    <slider x="16" step="3" y="378" max="120" width="217" display="In_groups_of_3" height="60" min="0" direction="Horizontal" default="0.0" variable="In_groups_of_3" units="people"></slider>
     <monitor x="241" precision="0" y="307" height="60" fontSize="11" width="100" display="Groups of 2">In_groups_of_2 / 2</monitor>
-    <slider x="16" step="2" y="307" max="100" width="217" display="In_groups_of_2" height="60" min="0" direction="Horizontal" default="0.0" variable="In_groups_of_2" units="people"></slider>
+    <slider x="16" step="2" y="307" max="120" width="217" display="In_groups_of_2" height="60" min="0" direction="Horizontal" default="0.0" variable="In_groups_of_2" units="people"></slider>
     <monitor x="241" precision="0" y="236" height="60" fontSize="11" width="100" display="Groups of 1">In_groups_of_1 / 1</monitor>
-    <slider x="16" step="1" y="236" max="100" width="217" display="In_groups_of_1" height="60" min="0" direction="Horizontal" default="0.0" variable="In_groups_of_1" units="people"></slider>
+    <slider x="16" step="1" y="236" max="120" width="217" display="In_groups_of_1" height="60" min="0" direction="Horizontal" default="0.0" variable="In_groups_of_1" units="people"></slider>
     <plot x="947" autoPlotX="true" yMax="1.0" autoPlotY="false" yAxis="panic level" y="94" xMin="0.0" height="267" legend="true" xMax="10.0" yMin="0.0" width="449" xAxis="time" display="Panic">
       <setup></setup>
       <update></update>
@@ -379,31 +279,12 @@ end
       </pen>
     </plot>
     <button x="249" y="591" height="40" disableUntilTicks="false" forever="true" kind="Observer" width="92" sizeVersion="0">go</button>
-    <view x="377" wrappingAllowedX="false" y="10" frameRate="30.0" minPycor="-30" height="614" showTickCounter="true" patchSize="10.0" fontSize="10" wrappingAllowedY="false" width="614" tickCounterLabel="ticks" maxPycor="30" updateMode="0" maxPxcor="30" minPxcor="-30"></view>
-    <button x="111" y="601" height="40" disableUntilTicks="false" forever="true" kind="Observer" width="92">go</button>
-    <button x="11" y="601" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="92">Setup</button>
-    <monitor x="227" precision="0" y="350" height="60" fontSize="11" width="100" display="Groups of 4">In_groups_of_4 / 4</monitor>
-    <monitor x="227" precision="0" y="282" height="60" fontSize="11" width="100" display="Groups of 3">In_groups_of_3 / 3</monitor>
-    <monitor x="227" precision="0" y="214" height="60" fontSize="11" width="100" display="Groups of 2">In_groups_of_2 / 2</monitor>
-    <slider x="11" step="3" y="282" max="100" width="208" display="In_groups_of_3" height="60" min="0" direction="Horizontal" default="21.0" variable="In_groups_of_3" units="people"></slider>
-    <slider x="11" step="4" y="350" max="100" width="208" display="In_groups_of_4" height="60" min="0" direction="Horizontal" default="40.0" variable="In_groups_of_4" units="people"></slider>
-    <slider x="11" step="2" y="214" max="100" width="208" display="In_groups_of_2" height="60" min="0" direction="Horizontal" default="50.0" variable="In_groups_of_2" units="people"></slider>
-    <monitor x="227" precision="17" y="415" height="60" fontSize="11" width="100" display="Groups of 5">In_groups_of_5 / 5</monitor>
-    <slider x="11" step="5" y="415" max="100" width="208" display="In_groups_of_5" height="60" min="0" direction="Horizontal" default="60.0" variable="In_groups_of_5" units="people"></slider>
-    <monitor x="227" precision="0" y="146" height="60" fontSize="11" width="100" display="Groups of 1">In_groups_of_1 / 1</monitor>
-    <slider x="11" step="1" y="146" max="100" width="208" display="In_groups_of_1" height="60" min="0" direction="Horizontal" default="17.0" variable="In_groups_of_1" units="people"></slider>
-    <note x="1001" y="11" backgroundDark="0" fontSize="20" width="150" markdown="true" height="35" textColorDark="-1" textColorLight="-16777216" backgroundLight="0">**Doors**</note>
-    <monitor x="1001" precision="1" y="271" height="60" fontSize="11" width="100">people-exited</monitor>
-    <slider x="1001" step="1" y="216" max="50" width="150" display="vis-door4" height="50" min="1" direction="Horizontal" default="26.0" variable="vis-door4"></slider>
-    <slider x="1001" step="1" y="161" max="50" width="150" display="vis-door2" height="50" min="1" direction="Horizontal" default="32.0" variable="vis-door2"></slider>
-    <slider x="1001" step="1" y="106" max="50" width="150" display="vis-door3" height="50" min="1" direction="Horizontal" default="38.0" variable="vis-door3"></slider>
-    <slider x="1001" step="1" y="51" max="50" width="150" display="vis-door1" height="50" min="1" direction="Horizontal" default="24.0" variable="vis-door1"></slider>
-    <monitor x="171" precision="0" y="16" height="81" fontSize="30" width="162" display="Total number of people">In_groups_of_1 + In_groups_of_2 + In_groups_of_3 + In_groups_of_4 + In_groups_of_5</monitor>
-    <slider x="11" step="0.05" y="16" max="1" width="150" display="dt" height="50" min="0.05" direction="Horizontal" default="0.25" variable="dt"></slider>
-    <slider x="11" step="0.1" y="75" max="2" width="150" display="speed-max" height="50" min="0.1" direction="Horizontal" default="1.4" variable="speed-max"></slider>
-    <switch x="11" y="486" height="50" on="false" variable="show-vectors?" width="148" display="show-vectors?"></switch>
-    <slider x="11" step="0.05" y="544" max="1" width="150" display="panic-smooth" height="50" min="0" direction="Horizontal" default="0.4" variable="panic-smooth"></slider>
-    <monitor x="1000" precision="17" y="336" height="60" fontSize="11" width="100" display="injured-people">injured-people</monitor>
+    <button x="149" y="591" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="92">Setup</button>
+    <monitor x="947" precision="17" y="11" height="79" fontSize="30" width="109" display="injured-people">injured-people</monitor>
+    <monitor x="784" precision="3" y="11" height="79" fontSize="30" width="151" display="highest avreage panic">h-avrg-gamma</monitor>
+    <monitor x="393" precision="17" y="745" height="60" fontSize="11" width="100">avrg-gamma</monitor>
+    <monitor x="667" precision="17" y="745" height="60" fontSize="11" width="100">stopted-why?</monitor>
+    <monitor x="530" precision="17" y="745" height="60" fontSize="11" width="100">avrg-velocity</monitor>
   </widgets>
   <info>## WHAT IS IT?
 
@@ -1280,4 +1161,44 @@ end
     </shape>
   </linkShapes>
   <previewCommands>setup repeat 75 [ go ]</previewCommands>
+  <experiments>
+    <experiment name="experiment" repetitions="10" sequentialRunOrder="true" runMetricsEveryStep="false">
+      <setup>setup</setup>
+      <go>go</go>
+      <metrics>
+        <metric>people-exited</metric>
+        <metric>format-time</metric>
+        <metric>injured-people</metric>
+        <metric>avrg-gamma</metric>
+        <metric>avrg-velocity</metric>
+        <metric>stopted-why?</metric>
+      </metrics>
+      <constants>
+        <enumeratedValueSet variable="In_groups_of_2">
+          <value value="0"></value>
+        </enumeratedValueSet>
+        <enumeratedValueSet variable="In_groups_of_1">
+          <value value="120"></value>
+        </enumeratedValueSet>
+        <enumeratedValueSet variable="In_groups_of_5">
+          <value value="0"></value>
+        </enumeratedValueSet>
+        <enumeratedValueSet variable="In_groups_of_4">
+          <value value="0"></value>
+        </enumeratedValueSet>
+        <enumeratedValueSet variable="Cohision-level">
+          <value value="&quot;Single people&quot;"></value>
+        </enumeratedValueSet>
+        <enumeratedValueSet variable="In_groups_of_3">
+          <value value="0"></value>
+        </enumeratedValueSet>
+        <enumeratedValueSet variable="show-vectors?">
+          <value value="true"></value>
+        </enumeratedValueSet>
+        <enumeratedValueSet variable="layout-choice">
+          <value value="&quot;layout-a&quot;"></value>
+        </enumeratedValueSet>
+      </constants>
+    </experiment>
+  </experiments>
 </model>
